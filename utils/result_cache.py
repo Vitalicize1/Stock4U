@@ -51,3 +51,14 @@ def set_cached_result(key: str, data: dict) -> None:
         pass
 
 
+def invalidate_cached_result(key: str) -> bool:
+    """Remove a cached result if present. Returns True if removed."""
+    path = _key_to_path(key)
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+            return True
+    except Exception:
+        return False
+    return False
+

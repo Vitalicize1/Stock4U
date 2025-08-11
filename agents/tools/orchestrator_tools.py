@@ -19,6 +19,12 @@ from langchain_core.tools import tool
 import requests
 from dotenv import load_dotenv
 
+# Optional JIRA integration
+try:
+    from utils.jira import safe_create_issue as _jira_create_issue
+except Exception:  # pragma: no cover
+    _jira_create_issue = None  # type: ignore
+
 # Load environment variables
 load_dotenv()
 
@@ -384,7 +390,7 @@ def handle_workflow_error(error: str, stage: str) -> Dict[str, Any]:
         # Get recovery options for the stage
         recovery_options = recovery_strategies.get(stage, ["retry", "skip_stage"])
         
-        return {
+        response = {
             "status": "error_handled",
             "error": error,
             "stage": stage,
@@ -392,6 +398,16 @@ def handle_workflow_error(error: str, stage: str) -> Dict[str, Any]:
             "recommended_action": "retry" if "retry" in recovery_options else "skip_stage",
             "error_timestamp": datetime.now().isoformat()
         }
+        # Optionally create a Jira issue for the error
+        if _jira_create_issue is not None and error:
+            summary = f"Stock4U error in {stage}: {str(error)[:80]}"
+            desc = f"Auto-generated from Stock4U.\n\nStage: {stage}\nError: {error}"
+            try:
+                jira_res = _jira_create_issue(summary, desc)
+                response["jira"] = jira_res
+            except Exception:
+                pass
+        return response
         
     except Exception as e:
         return {

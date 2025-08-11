@@ -3,7 +3,9 @@ streamlit
 yfinance
 pandas
 openai
-google-generativeai
+# Ensure compatibility with langchain-google-genai which requires >=0.6.18.
+# We avoid pinning google-generativeai directly to prevent hard conflicts.
+google-ai-generativelanguage>=0.6.18
 requests
 python-dotenv
 plotly
@@ -11,3 +13,6 @@ numpy
 networkx
 matplotlib
 langchain-tavily
+scikit-learn
+joblib
+mcp[cli]==1.12.4

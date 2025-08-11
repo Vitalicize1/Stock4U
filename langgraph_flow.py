@@ -70,6 +70,7 @@ from agents.tools.sentiment_integrator_tools import (
 from agents.tools.prediction_agent_tools import (
     generate_llm_prediction_tool,
     generate_rule_based_prediction_tool,
+    generate_ml_prediction_tool,
     calculate_confidence_metrics_tool,
     generate_recommendation_tool,
 )
@@ -181,18 +182,35 @@ def create_llm_agent_wrapper(agent, agent_name: str):
 
                     # Respect low_api_mode flag to optionally skip LLM
                     low_api_mode = bool(state.get("low_api_mode", False))
-                    if not low_api_mode:
-                        pred_res = generate_llm_prediction_tool.invoke({
-                            "analysis_summary": analysis_summary
+                    # Optional ML mode: prefer ML over LLM if flag is set
+                    use_ml = bool(state.get("use_ml_model", False))
+                    if use_ml:
+                        pred_res = generate_ml_prediction_tool.invoke({
+                            "state": state
                         })
                         if pred_res.get("status") != "success" or not pred_res.get("prediction_result"):
+                            # fallback to LLM or rule-based depending on low_api_mode
+                            if not low_api_mode:
+                                pred_res = generate_llm_prediction_tool.invoke({
+                                    "analysis_summary": analysis_summary
+                                })
+                            else:
+                                pred_res = generate_rule_based_prediction_tool.invoke({
+                                    "analysis_summary": analysis_summary
+                                })
+                    else:
+                        if not low_api_mode:
+                            pred_res = generate_llm_prediction_tool.invoke({
+                                "analysis_summary": analysis_summary
+                            })
+                            if pred_res.get("status") != "success" or not pred_res.get("prediction_result"):
+                                pred_res = generate_rule_based_prediction_tool.invoke({
+                                    "analysis_summary": analysis_summary
+                                })
+                        else:
                             pred_res = generate_rule_based_prediction_tool.invoke({
                                 "analysis_summary": analysis_summary
                             })
-                    else:
-                        pred_res = generate_rule_based_prediction_tool.invoke({
-                            "analysis_summary": analysis_summary
-                        })
                     prediction = pred_res.get("prediction_result", {})
 
                     conf_res = calculate_confidence_metrics_tool.invoke({
@@ -1194,10 +1212,13 @@ def run_prediction(ticker: str, timeframe: str = "1d", *args, **kwargs):
     # Extract flags from args/kwargs with safe defaults
     low_api_mode = bool(kwargs.get("low_api_mode", False))
     fast_ta_mode = bool(kwargs.get("fast_ta_mode", False))
+    use_ml_model = bool(kwargs.get("use_ml_model", False))
     if len(args) >= 1:
         low_api_mode = bool(args[0])
     if len(args) >= 2:
         fast_ta_mode = bool(args[1])
+    if len(args) >= 3:
+        use_ml_model = bool(args[2])
     """
     🚀 ENTRY POINT: Run the complete stock prediction pipeline following official LangGraph protocol.
     
@@ -1230,7 +1251,7 @@ def run_prediction(ticker: str, timeframe: str = "1d", *args, **kwargs):
     }
     
     # Check result cache (15-minute TTL)
-    cache_key = f"prediction_result::{ticker}::{timeframe}::lowapi={int(low_api_mode)}::fastta={int(fast_ta_mode)}"
+    cache_key = f"prediction_result::{ticker}::{timeframe}::lowapi={int(low_api_mode)}::fastta={int(fast_ta_mode)}::ml={int(use_ml_model)}"
     cached = get_cached_result(cache_key, ttl_seconds=15 * 60)
     if cached:
         cached["quota_status"] = quota_status
@@ -1239,6 +1260,7 @@ def run_prediction(ticker: str, timeframe: str = "1d", *args, **kwargs):
     # 🚀 INVOKE THE WORKFLOW
     input_data["low_api_mode"] = low_api_mode
     input_data["fast_ta_mode"] = fast_ta_mode
+    input_data["use_ml_model"] = use_ml_model
     result = graph.invoke(input_data)
     
     # Add quota status to result for user information

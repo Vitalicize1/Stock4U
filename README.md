@@ -1,8 +1,8 @@
-﻿# 📈 Stock4U
+﻿# Stock4U
 
 A multi-agent stock analysis system built with LangGraph, Streamlit, and yfinance. It performs technical analysis, integrates sentiment when available, and produces a clear prediction with risk assessment. See detailed docs in `docs/README.md`.
 
-## 🚀 Features
+## Features
 
 - Multi-agent LangGraph workflow (orchestrator, data collection, technical analysis, prediction, evaluation, elicitation)
 - Streamlit dashboard with predictions, chatbot assistant, and market data
@@ -10,7 +10,7 @@ A multi-agent stock analysis system built with LangGraph, Streamlit, and yfinanc
 - Risk assessment with visual breakdown
 - Optional LLM integrations (OpenAI/Google) with quota awareness
 
-## 🏗️ Architecture (High Level)
+## Architecture (High Level)
 
 Orchestrator → Data Collector → Technical Analyzer → Sentiment Analyzer → Sentiment Integrator → Prediction Agent → Evaluator Optimizer → Elicitation
 
@@ -19,7 +19,7 @@ Core entry points:
 - `dashboard.py`: Streamlit UI
 - `agents/`: agent and tool modules
 
-## ⚙️ Setup
+## Setup
 
 1) Create and activate a virtual environment
 
@@ -51,7 +51,7 @@ GOOGLE_API_KEY=your_google_key
 TAVILY_API_KEY=your_tavily_key
 ```
 
-## ▶️ Run
+## Run
 
 ### Streamlit Dashboard
 
@@ -81,7 +81,7 @@ result = run_prediction("AAPL", timeframe="1d", low_api_mode=False)
 print(result)
 ```
 
-## 🧪 Tests
+## Tests
 
 ```bash
 python tests/run_all_tests.py
@@ -89,12 +89,12 @@ python tests/run_all_tests.py
 pytest -q
 ```
 
-## 📚 Docs
+## Docs
 
 - Start here: `docs/README.md`
 - Additional guides: chatbot, workflow visualization, tool integration
 
-## 🗂️ Project Structure
+## Project Structure
 
 ```
 Stock4U/
@@ -108,12 +108,12 @@ Stock4U/
 └── tests/                  # Test suite
 ```
 
-## ℹ️ Notes
+## Notes
 
 - This project is for educational/informational purposes only; not financial advice.
 - Some features (e.g., LLM calls) are optional and can be disabled via UI toggles.
 
-## 🌐 Repository
+## Repository
 
 GitHub: https://github.com/Vitalicize1/Stock4U
 

@@ -99,6 +99,76 @@ def generate_rule_based_prediction_tool(analysis_summary: str) -> Dict[str, Any]
 
 
 @tool
+def generate_ml_prediction_tool(state: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Generate a prediction using a lightweight traditional ML model over engineered features.
+
+    Args:
+        state: The full pipeline state (to extract features already computed)
+
+    Returns:
+        Dict with keys: prediction_result (dict)
+    """
+    try:
+        from ml.features import build_features_from_state
+        from ml.loader import load_latest_model
+        from ml.model import load_default_model
+        import numpy as np
+
+        X, feats = build_features_from_state(state)
+        artifact = load_latest_model()
+        if artifact and artifact.feature_names:
+            # Align to artifact feature order if available
+            feature_names = artifact.feature_names
+            feats_ordered = []
+            for name in feature_names:
+                feats_ordered.append(feats.get(name, 0.0))
+            Xa = np.array(feats_ordered, dtype=float)
+            clf = artifact.model
+            try:
+                proba = clf.predict_proba(Xa.reshape(1, -1))[:, 1][0]
+                p_up = float(proba)
+            except Exception:
+                # Fallback to default linear model if shape mismatch
+                model = load_default_model(len(X))
+                p_up = model.predict_proba_up(X)
+        else:
+            model = load_default_model(len(X))
+            p_up = model.predict_proba_up(X)
+
+        direction = "UP" if p_up >= 0.55 else ("DOWN" if p_up <= 0.45 else "NEUTRAL")
+        confidence = float(abs(p_up - 0.5) * 200)  # map 0.5->0, 1.0->100, 0.0->100
+
+        prediction = {
+            "direction": direction,
+            "confidence": round(confidence, 1),
+            "price_target": None,
+            "reasoning": "Traditional ML model combining technical and sentiment features.",
+            "key_factors": [
+                f"RSI={feats.get('rsi'):.2f}",
+                f"TrendStrength={feats.get('trend_strength'):.2f}",
+                f"IntegratedScore={feats.get('integrated_score'):.2f}",
+            ],
+            "model": {
+                "type": "linear",
+                "proba_up": round(float(p_up) * 100.0, 1)
+            }
+        }
+
+        return {
+            "status": "success",
+            "prediction_result": prediction,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": f"ML prediction failed: {str(e)}",
+            "prediction_result": None
+        }
+
+
+@tool
 def calculate_confidence_metrics_tool(technical_analysis: Dict[str, Any],
                                       sentiment_integration: Dict[str, Any],
                                       prediction_result: Dict[str, Any],

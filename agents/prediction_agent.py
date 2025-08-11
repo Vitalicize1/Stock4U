@@ -95,12 +95,28 @@ class PredictionAgent:
             
             # Create comprehensive analysis summary for LLM
             analysis_summary = self._create_comprehensive_analysis_summary(
-                ticker, price_data, technical_analysis, sentiment_analysis, 
+                ticker, price_data, technical_analysis, sentiment_analysis,
                 sentiment_integration, company_info, market_data
             )
-            
-            # Generate prediction using LLM
-            prediction_result = self._generate_llm_prediction(analysis_summary)
+
+            # Optional ML path (when requested)
+            use_ml_model = bool(data.get("use_ml_model", False))
+            prediction_engine = "llm"
+            prediction_result = None
+            if use_ml_model:
+                try:
+                    from agents.tools.prediction_agent_tools import generate_ml_prediction_tool
+                    ml_res = generate_ml_prediction_tool.invoke({"state": data})
+                    if ml_res.get("status") == "success" and ml_res.get("prediction_result"):
+                        prediction_result = ml_res.get("prediction_result")
+                        prediction_engine = "ml"
+                except Exception:
+                    prediction_result = None
+
+            # If ML not used or failed, fall back to LLM + rule-based
+            if not prediction_result:
+                prediction_result = self._generate_llm_prediction(analysis_summary)
+                prediction_engine = "llm"
             
             # Calculate confidence and risk metrics
             # Compute confidence metrics using tool
@@ -128,7 +144,8 @@ class PredictionAgent:
                 "recommendation": self._generate_recommendation(prediction_result, confidence_metrics),
                 "llm_provider": self.llm_provider,
                 "llm_available": self.llm_available,
-                "sentiment_integration": sentiment_integration
+                "sentiment_integration": sentiment_integration,
+                "prediction_engine": prediction_engine,
             }
             
             result = {

@@ -115,6 +115,16 @@ class SentimentIntegratorAgent:
                 except Exception:
                     pass
             
+            # Best-effort: append daily sentiment sample for ML training
+            try:
+                from ml.sentiment_logger import append_sentiment_sample
+                tkr = data.get("ticker", "").upper()
+                ts = (tool_res or {}).get("timestamp") or datetime.now().isoformat()
+                s_score = (sentiment_analysis.get("overall_sentiment", {}) or {}).get("sentiment_score", 0.0)
+                append_sentiment_sample(tkr, ts, float(s_score or 0.0))
+            except Exception:
+                pass
+
             return {
                 "status": "success",
                 "sentiment_integration": integration_results,
