@@ -1,0 +1,13 @@
+langgraph
+streamlit
+yfinance
+pandas
+openai
+google-generativeai
+requests
+python-dotenv
+plotly
+numpy
+networkx
+matplotlib
+langchain-tavily
