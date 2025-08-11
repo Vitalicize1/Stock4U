@@ -15,7 +15,7 @@
 ## 🎯 Project Overview
 
 ### **Mission Statement**
-The **Agentic Stock Predictor v2** is an advanced AI-powered stock prediction system that combines multiple specialized agents to analyze stocks comprehensively and generate accurate predictions. The system integrates technical analysis, sentiment analysis, market data, and machine learning to provide actionable investment insights.
+**Stock4U** is an advanced AI-powered stock prediction system that combines multiple specialized agents to analyze stocks comprehensively and generate accurate predictions. The system integrates technical analysis, sentiment analysis, market data, and machine learning to provide actionable investment insights.
 
 ### **Core Objectives**
 - ✅ Generate reliable stock movement predictions
@@ -406,7 +406,7 @@ User-Friendly Output
 
 ## 🎯 Summary
 
-The **Agentic Stock Predictor v2** represents a sophisticated AI-powered stock prediction system that combines traditional technical analysis with modern sentiment analysis and LLM-powered reasoning to provide comprehensive investment insights.
+**Stock4U** represents a sophisticated AI-powered stock prediction system that combines traditional technical analysis with modern sentiment analysis and LLM-powered reasoning to provide comprehensive investment insights.
 
 **Key Strengths:**
 - 🏗️ **Modular Architecture**: Easy to maintain and extend

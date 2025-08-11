@@ -1,4 +1,4 @@
-﻿# 🤖 Agentic Stock Predictor v2
+﻿# 📈 Stock4U
 
 A multi-agent stock analysis system built with LangGraph, Streamlit, and yfinance. It performs technical analysis, integrates sentiment when available, and produces a clear prediction with risk assessment. See detailed docs in `docs/README.md`.
 
@@ -97,7 +97,7 @@ pytest -q
 ## 🗂️ Project Structure
 
 ```
-agentic_stock_predictorv2/
+Stock4U/
 ├── agents/                 # AI agent modules and tools
 ├── docs/                   # Documentation
 ├── llm/                    # LLM client wrappers
@@ -115,6 +115,6 @@ agentic_stock_predictorv2/
 
 ## 🌐 Repository
 
-GitHub: https://github.com/Vitalicize1/AgenticStockPredictor
+GitHub: https://github.com/Vitalicize1/Stock4U
 
 

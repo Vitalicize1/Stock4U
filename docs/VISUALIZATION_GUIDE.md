@@ -147,7 +147,7 @@ pos = nx.kamada_kawai_layout(G)
 ## 📁 File Structure
 
 ```
-agentic_stock_predictorv2/
+Stock4U/
 ├── langgraph_flow.py          # Main workflow + visualization
 ├── visualize_workflow.py      # Standalone visualization script
 ├── dashboard.py               # Streamlit dashboard with visualization

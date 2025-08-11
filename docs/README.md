@@ -1,6 +1,6 @@
 # 📚 Documentation Index
 
-Welcome to the **Agentic Stock Predictor v2** documentation! This folder contains comprehensive guides for all aspects of the system.
+Welcome to the **Stock4U** documentation! This folder contains comprehensive guides for all aspects of the system.
 
 ## 🎯 **Quick Start**
 

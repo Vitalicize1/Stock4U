@@ -199,7 +199,7 @@ python test_chatbot.py
 ## 📁 File Structure
 
 ```
-agentic_stock_predictorv2/
+Stock4U/
 ├── dashboard.py              # Main dashboard with chatbot tab
 ├── chatbot_interface.py      # Standalone chatbot interface
 ├── test_chatbot.py          # Chatbot testing script

@@ -1,6 +1,6 @@
 # 🧪 Tests Directory
 
-This directory contains all test files for the Agentic Stock Predictor project.
+This directory contains all test files for the Stock4U project.
 
 ## 📋 Available Tests
 

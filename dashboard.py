@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import pandas as pd
 from langgraph_flow import run_prediction, run_chatbot_workflow
 import plotly.graph_objects as go
@@ -9,12 +9,12 @@ import json
 
 def main():
     st.set_page_config(
-        page_title="Agentic Stock Predictor",
+        page_title="Stock4U",
         page_icon="📈",
         layout="wide"
     )
     
-    st.title("🤖 Agentic Stock Prediction System")
+    st.title("📈 Stock4U")
     st.markdown("---")
     
     # Create tabs for different sections (remove workflow tab for end-users)

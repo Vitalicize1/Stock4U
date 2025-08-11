@@ -118,7 +118,7 @@ def create_main_workflow_diagram():
     ax.text(6, 13.8, 'STOCK PREDICTION PROJECT WORKFLOW', 
             ha='center', va='center', fontsize=18, fontweight='bold', color='darkred')
     
-    ax.text(6, 13.5, 'Agentic Stock Predictor v2 - Multi-Agent AI System', 
+    ax.text(6, 13.5, 'Stock4U - Multi-Agent AI System', 
             ha='center', va='center', fontsize=12, style='italic', color='darkblue')
     
     # Add key features box

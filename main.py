@@ -4,9 +4,9 @@ from datetime import datetime
 
 def main():
     """
-    Main entry point for the agentic stock prediction system.
+    Main entry point for the Stock4U system.
     """
-    print("🤖 Agentic Stock Prediction System")
+    print("📈 Stock4U")
     print("=" * 50)
     
     # Test with a few popular stocks

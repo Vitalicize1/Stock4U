@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🧪 Test Runner for Agentic Stock Predictor
+🧪 Test Runner for Stock4U
 Run all tests in the tests folder in an organized manner.
 """
 
@@ -96,7 +96,7 @@ def run_all_tests() -> None:
     """
     Run all test modules in the tests folder.
     """
-    print("🚀 Agentic Stock Predictor - Test Suite")
+    print("🚀 Stock4U - Test Suite")
     print("=" * 60)
     
     # Get all test files
@@ -210,7 +210,7 @@ def main():
     """
     import argparse
     
-    parser = argparse.ArgumentParser(description="Run tests for Agentic Stock Predictor")
+    parser = argparse.ArgumentParser(description="Run tests for Stock4U")
     parser.add_argument("--test", "-t", help="Run a specific test")
     parser.add_argument("--list", "-l", action="store_true", help="List available tests")
     
