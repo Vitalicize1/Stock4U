@@ -6,6 +6,33 @@ A multi-agent stock analysis system built with LangGraph, Streamlit, and yfinanc
 
 - Multi-agent LangGraph workflow (orchestrator, data collection, technical analysis, prediction, evaluation, elicitation)
 - Streamlit dashboard with predictions, chatbot assistant, and market data
+## Production notes (auth, learning, monitoring)
+
+- API auth: set `API_TOKEN` (any strong token) and call endpoints with header `Authorization: Bearer <token>`.
+- Rate limiting: `RATE_LIMIT_PER_MIN` (default 60).
+- Autonomous learning: enable with `LEARNING_SCHED_ENABLED=1` and configure `LEARNING_TICKERS`, `LEARNING_TIMEFRAMES`, `LEARNING_PERIOD`, `LEARNING_ITERATIONS`, `LEARNING_LR`, `LEARNING_CRON`.
+- Key endpoints:
+  - `POST /predict`, `POST /baseline`, `GET /baseline/latest`
+  - `POST /agent/learn`, `GET /agent/learn/status`, `GET /agent/learn/last`
+  - `GET /validation/run` (schema/range checks)
+  - `GET /health/errors`, `GET /metrics`, `GET /auth/verify`
+
+### Nightly QA (optional)
+
+- Run locally:
+```
+python -m utils.nightly_qa
+```
+- Windows Task Scheduler helper script: `ops/nightly_qa.ps1`:
+```
+powershell -ExecutionPolicy Bypass -File ops/nightly_qa.ps1 -ApiUrl http://localhost:8000 -Token YOUR_TOKEN
+```
+
+### Prometheus monitoring (optional)
+
+- Config at `ops/prometheus/prometheus.yml` (uses Bearer token from `token.txt`).
+- See `ops/prometheus/README.md` for Docker/native instructions.
+
 - Technical indicators, trend analysis, support/resistance, trading signals
 - Risk assessment with visual breakdown
 - Optional LLM integrations (OpenAI/Google) with quota awareness

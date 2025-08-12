@@ -17,19 +17,49 @@ from dashboard.views.results import display_results
 def main() -> None:
     st.set_page_config(
         page_title="Stock4U",
-        page_icon="📈",
         layout="wide"
     )
 
-    st.title("📈 Stock4U")
+    # Global typography: Inter for body, Manrope for headings
+    st.markdown(
+        """
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700&display=swap');
+        :root {
+          --app-body-font: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, 'Noto Sans', 'Liberation Sans', sans-serif;
+          --app-heading-font: 'Manrope', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+        }
+        html, body, [data-testid="stAppViewContainer"], [data-testid="stSidebar"] {
+          font-family: var(--app-body-font);
+          font-variant-numeric: tabular-nums;
+        }
+        h1, h2, h3, h4, h5, h6 { 
+          font-family: var(--app-heading-font);
+          font-weight: 700;
+          letter-spacing: 0.1px;
+        }
+        .stButton button, .stDownloadButton button, .st-emotion-cache button, .stTextInput input, .stTextArea textarea, .stSelectbox div {
+          font-family: var(--app-body-font);
+        }
+        [data-testid="stMetricValue"], [data-testid="stMetricDelta"] {
+          font-variant-numeric: tabular-nums;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.title("Stock4U")
     st.markdown("---")
 
     # Create tabs for different sections (remove workflow tab for end-users)
-    tab1, tab3, tab4, tab5 = st.tabs(["📊 Predictions", "💬 Chatbot", "📈 Market Data", "🚨 Alerts"])
+    tab1, tab3, tab4, tab5 = st.tabs(["Predictions", "Chatbot", "Market Data", "Alerts"])
 
     with tab1:
         # Sidebar form so pressing Enter submits and runs prediction
-        st.sidebar.header("📊 Prediction Settings")
+        st.sidebar.header("Prediction Settings")
+        if "has_prediction_results" not in st.session_state:
+            st.session_state["has_prediction_results"] = False
         with st.sidebar.form("prediction_form", clear_on_submit=False):
             ticker_input = st.text_input(
                 "Enter Stock Ticker",
@@ -44,7 +74,7 @@ def main() -> None:
             low_api_mode = st.toggle("Low API mode (no LLM for prediction)", value=False, help="Use rule-based prediction and skip LLM calls to save quota.")
             fast_ta_mode = st.toggle("Fast TA mode (quicker technical analysis)", value=False, help="Run a minimal technical analysis (skip heavy indicators/patterns) for speed.")
             use_ml_model = st.toggle("Use ML model (traditional) for prediction", value=False, help="Run a lightweight ML model using engineered features instead of LLM.")
-            submitted = st.form_submit_button("🚀 Run Prediction")
+            submitted = st.form_submit_button("Run Prediction")
 
         if submitted:
             ticker = (ticker_input or "").upper().strip()
@@ -54,14 +84,29 @@ def main() -> None:
                         result = run_prediction(ticker, timeframe, low_api_mode=low_api_mode, fast_ta_mode=fast_ta_mode, use_ml_model=use_ml_model)
                         if 'quota_status' in result:
                             st.sidebar.markdown("---")
-                            st.sidebar.header("📊 LLM Provider Status")
+                            st.sidebar.header("LLM Provider Status")
                             quota_status = result['quota_status']
                             for provider, status in quota_status.items():
                                 if status["available"]:
-                                    st.sidebar.success(f"✅ {provider.upper()}: {status['reason']}")
+                                    st.sidebar.success(f"{provider.upper()}: {status['reason']}")
                                 else:
-                                    st.sidebar.error(f"❌ {provider.upper()}: {status['reason']}")
-                        display_results(ticker, result)
+                                    st.sidebar.error(f"{provider.upper()}: {status['reason']}")
+                        # Store for rendering after sidebar so we can show a banner above results
+                        st.session_state["has_prediction_results"] = True
+                        st.session_state["last_result"] = result
+                        # Build last run summary
+                        pr = result.get("prediction_result", {})
+                        prediction = pr.get("prediction", pr)
+                        cm = result.get("confidence_metrics") or pr.get("confidence_metrics") or {}
+                        overall_conf = cm.get("overall_confidence")
+                        if overall_conf is None:
+                            overall_conf = prediction.get("confidence")
+                        st.session_state["last_run_summary"] = {
+                            "ticker": ticker,
+                            "timeframe": timeframe,
+                            "direction": prediction.get("direction"),
+                            "confidence": overall_conf,
+                        }
                     except Exception as e:
                         st.error(f"Error analyzing {ticker}: {str(e)}")
             else:
@@ -69,7 +114,7 @@ def main() -> None:
 
         # Quick analysis section
         st.sidebar.markdown("---")
-        st.sidebar.header("⚡ Quick Analysis")
+        st.sidebar.header("Quick Analysis")
 
         popular_tickers = ["AAPL", "MSFT", "GOOGL", "TSLA", "AMZN", "NVDA"]
         selected_quick = st.sidebar.selectbox("Popular Stocks", popular_tickers)
@@ -82,22 +127,36 @@ def main() -> None:
                     # Display quota status if available
                     if 'quota_status' in result:
                         st.sidebar.markdown("---")
-                        st.sidebar.header("📊 LLM Provider Status")
+                        st.sidebar.header("LLM Provider Status")
 
                         quota_status = result['quota_status']
                         for provider, status in quota_status.items():
                             if status["available"]:
-                                st.sidebar.success(f"✅ {provider.upper()}: {status['reason']}")
+                                st.sidebar.success(f"{provider.upper()}: {status['reason']}")
                             else:
-                                st.sidebar.error(f"❌ {provider.upper()}: {status['reason']}")
+                                st.sidebar.error(f"{provider.upper()}: {status['reason']}")
 
-                    display_results(selected_quick, result)
+                    st.session_state["has_prediction_results"] = True
+                    st.session_state["has_prediction_results"] = True
+                    st.session_state["last_result"] = result
+                    pr = result.get("prediction_result", {})
+                    prediction = pr.get("prediction", pr)
+                    cm = result.get("confidence_metrics") or pr.get("confidence_metrics") or {}
+                    overall_conf = cm.get("overall_confidence")
+                    if overall_conf is None:
+                        overall_conf = prediction.get("confidence")
+                    st.session_state["last_run_summary"] = {
+                        "ticker": selected_quick,
+                        "timeframe": "1d",
+                        "direction": prediction.get("direction"),
+                        "confidence": overall_conf,
+                    }
                 except Exception as e:
                     st.error(f"Error in quick analysis: {str(e)}")
 
         # --- Jira Issue Filing ---
         st.sidebar.markdown("---")
-        st.sidebar.header("📝 File an Issue (Jira)")
+        st.sidebar.header("File an Issue")
         # Connection check button
         if st.sidebar.button("Test Jira Connection"):
             try:
@@ -151,7 +210,7 @@ def main() -> None:
                         except Exception:
                             pass
                     if issue_url:
-                        st.sidebar.markdown(f"✅ Created issue: [{key}]({issue_url})")
+                        st.sidebar.markdown(f"Created issue: [{key}]({issue_url})")
                     else:
                         st.sidebar.success(f"Created issue: {key}")
                 else:
@@ -159,8 +218,45 @@ def main() -> None:
             except Exception as e:
                 st.sidebar.error(f"Jira integration error: {str(e)}")
 
+        # Render Daily Top Picks
+        st.markdown("---")
+        try:
+            from dashboard.components.daily_picks import display_daily_picks
+            # Allow users to paste a large custom universe; keep defaults if empty.
+            with st.expander("Daily Picks Universe (optional)"):
+                custom_universe_text = st.text_area(
+                    "Tickers (comma or newline separated)",
+                    value="",
+                    height=80,
+                    help="Provide a custom list to scan. If empty, a curated default list is used. For very large lists, a rotating subset is scanned daily.",
+                )
+                max_scan = st.slider("Max tickers to scan today", min_value=50, max_value=1000, value=200, step=50)
+            display_daily_picks(custom_tickers_text=custom_universe_text, max_scan=max_scan, top_n=3)
+        except Exception as e:
+            st.info(f"Daily picks unavailable: {e}")
+
+        # Render last run summary and results (if present), else placeholder
+        if st.session_state.get("has_prediction_results", False) and st.session_state.get("last_result") is not None:
+            summary = st.session_state.get("last_run_summary", {})
+            tkr = summary.get("ticker", "")
+            tf = summary.get("timeframe", "")
+            direction = summary.get("direction")
+            confidence = summary.get("confidence")
+            msg_parts = [f"Ticker: {tkr}", f"Timeframe: {tf}"]
+            if direction is not None:
+                msg_parts.append(f"Direction: {direction}")
+            if isinstance(confidence, (int, float)):
+                msg_parts.append(f"Confidence: {float(confidence):.1f}%")
+            st.info("Last run — " + " | ".join(msg_parts))
+            display_results(tkr, st.session_state.get("last_result"))
+        else:
+            st.subheader("Predictions")
+            st.write(
+                "Use the form in the sidebar to run a prediction. Choose a ticker and timeframe, then click Run Prediction."
+            )
+
     with tab3:
-        st.header("💬 AI Chatbot Assistant")
+        st.header("AI Chatbot Assistant")
         st.markdown("---")
 
         # Initialize chat history
@@ -184,7 +280,7 @@ def main() -> None:
             # Generate assistant response using LangGraph workflow
             with st.chat_message("assistant"):
                 try:
-                    with st.spinner("🤖 Processing your request..."):
+                    with st.spinner("Processing your request..."):
                         # Use the new chatbot workflow
                         result = run_chatbot_workflow(prompt)
 
@@ -205,7 +301,7 @@ def main() -> None:
                     st.markdown(response)
 
                 except Exception as e:
-                    error_response = f"❌ Sorry, I encountered an error: {str(e)}"
+                    error_response = f"Sorry, I encountered an error: {str(e)}"
                     st.markdown(error_response)
                     response = error_response
 
@@ -214,13 +310,13 @@ def main() -> None:
 
         # Sidebar for chatbot features
         st.sidebar.markdown("---")
-        st.sidebar.header("🤖 Chatbot Features")
+        st.sidebar.header("Chatbot Features")
 
-        if st.sidebar.button("🔄 Clear Chat"):
+        if st.sidebar.button("Clear Chat"):
             st.session_state.messages = []
             st.rerun()
 
-        if st.sidebar.button("📊 Quick Stock Analysis"):
+        if st.sidebar.button("Quick Stock Analysis"):
             quick_analysis_prompt = "Can you analyze AAPL stock for me?"
             st.session_state.messages.append({"role": "user", "content": quick_analysis_prompt})
             with st.chat_message("user"):
@@ -228,7 +324,7 @@ def main() -> None:
 
             with st.chat_message("assistant"):
                 try:
-                    with st.spinner("🤖 Analyzing AAPL..."):
+                    with st.spinner("Analyzing AAPL..."):
                         result = run_chatbot_workflow(quick_analysis_prompt)
                         if "final_summary" in result:
                             response = format_stock_analysis_response("AAPL", result)
@@ -236,20 +332,20 @@ def main() -> None:
                             response = "Sorry, I couldn't complete the analysis."
                     st.markdown(response)
                 except Exception as e:
-                    error_response = f"❌ Error: {str(e)}"
+                    error_response = f"Error: {str(e)}"
                     st.markdown(error_response)
                     response = error_response
 
             st.session_state.messages.append({"role": "assistant", "content": response})
 
     with tab4:
-        st.header("📈 Market Data")
+        st.header("Market Data")
         st.markdown("---")
 
         # Market data section
         market_ticker = st.text_input("Enter ticker for market data:", value="AAPL")
 
-        if st.button("📊 Get Market Data"):
+        if st.button("Get Market Data"):
             try:
                 from dashboard.components.market_data import display_market_data
 
@@ -258,12 +354,47 @@ def main() -> None:
                 st.error(f"Error fetching market data: {str(e)}")
 
     with tab5:
-        st.header("🚨 Monitoring & Alerts")
+        st.header("Monitoring & Alerts")
         st.markdown("---")
         from dashboard.components.alerts import display_alerts
         alerts_file = st.text_input("Alerts file path", value="cache/metrics/alerts.log")
         max_rows = st.slider("Max rows", min_value=20, max_value=500, value=200, step=10)
-        display_alerts(alerts_file, max_rows)
+        # Simple alerts view by default for user-friendliness
+        display_alerts(alerts_file, max_rows, simple=True)
+
+        st.markdown("---")
+        st.subheader("Accuracy Baseline")
+        colb1, colb2, colb3 = st.columns([2,1,1])
+        with colb1:
+            baseline_tickers = st.text_input("Tickers (comma)", value="AAPL,MSFT,GOOGL,NVDA,AMZN")
+        with colb2:
+            baseline_period = st.selectbox("Period", ["6mo","1y","2y"], index=1)
+        with colb3:
+            if st.button("Run Baseline"):
+                try:
+                    from utils.baseline import BaselineConfig, run_baseline
+                    cfg = BaselineConfig(
+                        tickers=[t.strip().upper() for t in baseline_tickers.split(",") if t.strip()],
+                        period=baseline_period,
+                        policies=["agent","rule","sma20"],
+                        offline=True,
+                    )
+                    with st.spinner("Running baseline backtests..."):
+                        out = run_baseline(cfg)
+                    st.success(f"Baseline generated: {out['json']}")
+                    try:
+                        import json as _json
+                        with open(out['json'], 'r', encoding='utf-8') as f:
+                            data = _json.load(f)
+                        st.json({k: data[k] for k in ["period","tickers","by_policy"]})
+                    except Exception:
+                        pass
+                except Exception as e:
+                    st.error(f"Baseline failed: {e}")
+
+
+
+    
 
 
 # Import placed at end to avoid circular at app import time

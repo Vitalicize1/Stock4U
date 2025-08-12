@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import plotly.graph_objects as go
+from dashboard.utils import humanize_label
 
 
 def display_technical_analysis(technical_summary: dict, ticker: str | None = None) -> None:
@@ -34,7 +35,7 @@ def display_technical_analysis(technical_summary: dict, ticker: str | None = Non
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("📈 Technical Indicators")
+        st.subheader("Technical Indicators")
 
         technical_score = technical_summary.get("technical_score", 0)
         st.metric("Technical Score", f"{technical_score:.1f}/100")
@@ -142,7 +143,7 @@ def display_technical_analysis(technical_summary: dict, ticker: str | None = Non
                 st.write(f"- ADX Strength: {adx_strength:.1f}")
 
     with col2:
-        st.subheader("🔍 Technical Signals")
+        st.subheader("Technical Signals")
 
         # Display trading signals
         trading_signals = technical_summary.get("trading_signals", {})
@@ -151,7 +152,7 @@ def display_technical_analysis(technical_summary: dict, ticker: str | None = Non
             signal_strength = trading_signals.get("signal_strength", 0)
             total_signals = trading_signals.get("total_signals", 0)
 
-            st.write(f"**Overall Recommendation:** {overall_recommendation}")
+            st.write(f"**Overall Recommendation:** {humanize_label(overall_recommendation)}")
             st.write(f"**Signal Strength:** {signal_strength}")
             st.write(f"**Total Signals:** {total_signals}")
 
@@ -161,9 +162,9 @@ def display_technical_analysis(technical_summary: dict, ticker: str | None = Non
                 st.write("**Individual Signals:**")
                 for signal in signals[:5]:  # Show first 5 signals
                     if isinstance(signal, dict):
-                        signal_type = signal.get("type", "Unknown")
-                        indicator = signal.get("indicator", "Unknown")
-                        strength = signal.get("strength", "Unknown")
+                        signal_type = humanize_label(signal.get("type", "Unknown"))
+                        indicator = humanize_label(signal.get("indicator", "Unknown"))
+                        strength = humanize_label(signal.get("strength", "Unknown"))
                         reason = signal.get("reason", "")
                         st.write(f"- {signal_type} ({indicator}): {reason}")
                     else:
@@ -198,8 +199,8 @@ def display_technical_analysis(technical_summary: dict, ticker: str | None = Non
             st.write(f"**Patterns Detected:** {len(patterns)}")
             for pattern in patterns[:3]:  # Show first 3 patterns
                 if isinstance(pattern, dict):
-                    pattern_name = pattern.get("pattern", "Unknown")
-                    signal = pattern.get("signal", "Unknown")
+                    pattern_name = humanize_label(pattern.get("pattern", "Unknown"))
+                    signal = humanize_label(pattern.get("signal", "Unknown"))
                     st.write(f"- {pattern_name}: {signal}")
                 else:
                     st.write(f"- {pattern}")
@@ -207,7 +208,7 @@ def display_technical_analysis(technical_summary: dict, ticker: str | None = Non
     # Optional trend chart with MAs
     if ticker and df is not None:
         try:
-            st.subheader("📉 Trend Chart (6mo)")
+            st.subheader("Trend Chart (6mo)")
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=df.index, y=df["Close"], name="Close", line=dict(color="#1f77b4")))
             if "SMA20" in df:

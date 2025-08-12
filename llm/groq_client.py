@@ -1,11 +1,25 @@
 import os
+from pathlib import Path
 from typing import Dict, Any
 from dotenv import load_dotenv
 import json
 import requests
+from utils.errors import ErrorInfo, safe_response
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from common locations to be robust across CLIs/Streamlit/tests
+def _load_env_robust() -> None:
+    # 1) Default .env resolution from current working directory upward
+    load_dotenv()
+    # 2) Project root relative to this file (../.env)
+    root_env = Path(__file__).resolve().parents[1] / ".env"
+    if root_env.exists():
+        load_dotenv(dotenv_path=root_env, override=False)
+    # 3) Environment variable to explicitly point to a custom .env
+    custom_env = os.getenv("ENV_FILE")
+    if custom_env and Path(custom_env).exists():
+        load_dotenv(dotenv_path=custom_env, override=False)
+
+_load_env_robust()
 
 class GroqClient:
     """
@@ -22,7 +36,11 @@ class GroqClient:
         """
         self.api_key = os.getenv("GROQ_API_KEY")
         if not self.api_key:
-            raise ValueError("GROQ_API_KEY not found in environment variables")
+            # Provide a clearer error with hints
+            raise ValueError(
+                "GROQ_API_KEY not found. Ensure it's set in your environment or .env at project root. "
+                "You can also set ENV_FILE to point to your .env explicitly."
+            )
         
         self.model = model
         self.base_url = "https://api.groq.com/openai/v1/chat/completions"
@@ -136,8 +154,8 @@ Be conservative in your predictions and always consider market volatility.
             # Re-raise quota errors
             raise e
         except Exception as e:
-            print(f"Error in Groq analysis: {str(e)}")
-            return self._get_default_prediction()
+            err = ErrorInfo(code="llm_groq_error", message=str(e), provider="groq", retryable=True)
+            return safe_response({"prediction": self._get_default_prediction()}, err)
     
     def _validate_prediction(self, prediction: Dict[str, Any]) -> Dict[str, Any]:
         """Validate and clean the prediction data."""
@@ -237,16 +255,8 @@ def get_groq_prediction(analysis_summary: str, model: str = "llama3-8b-8192") ->
         client = GroqClient(model)
         return client.analyze_stock_data(analysis_summary)
     except Exception as e:
-        print(f"Groq prediction failed: {str(e)}")
-        return {
-            "direction": "NEUTRAL",
-            "confidence": 50.0,
-            "price_target": None,
-            "price_range": {"low": None, "high": None},
-            "reasoning": f"Prediction failed: {str(e)}",
-            "key_factors": ["Analysis failed"],
-            "risk_factors": ["Unable to assess risks"]
-        }
+        err = ErrorInfo(code="llm_groq_error", message=str(e), provider="groq", retryable=True)
+        return safe_response({"prediction": GroqClient(model)._get_default_prediction()}, err)
 
 def get_groq_client():
     """
@@ -261,11 +271,11 @@ def get_groq_client():
         from dotenv import load_dotenv
         
         # Load environment variables
-        load_dotenv()
+        _load_env_robust()
         
         api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
-            raise ValueError("GROQ_API_KEY not found in environment variables")
+            raise ValueError("GROQ_API_KEY not found. Set it in your environment or .env.")
         
         # Create LangChain client without making a test call
         client = ChatGroq(

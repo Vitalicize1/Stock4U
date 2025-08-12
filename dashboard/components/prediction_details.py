@@ -2,6 +2,7 @@ import streamlit as st
 import json
 import re
 import pandas as pd
+from dashboard.utils import humanize_label
 
 
 def _render_reasoning(reasoning: object) -> None:
@@ -11,8 +12,11 @@ def _render_reasoning(reasoning: object) -> None:
     - If long text: show preview and expandable full text
     - Otherwise: render as markdown to keep bullets/line breaks
     """
-    # Dict/list provided directly
-    if isinstance(reasoning, (dict, list)):
+    # Dict/list provided directly → prefer table render if dict
+    if isinstance(reasoning, dict):
+        _render_parsed_json(reasoning)
+        return
+    if isinstance(reasoning, list):
         st.json(reasoning)
         return
 
@@ -29,9 +33,12 @@ def _render_reasoning(reasoning: object) -> None:
             json_candidate = _normalize_json_like(json_candidate)
             try:
                 obj = json.loads(json_candidate)
-                if preamble:
-                    st.write(preamble)
+                # Hide noisy preamble like "Here is the analysis..."
                 _render_parsed_json(obj)
+                # Optionally show preamble in an expander for transparency
+                if preamble:
+                    with st.expander("Show LLM preamble"):
+                        st.markdown(preamble)
                 return
             except Exception:
                 # fall through to other strategies
@@ -50,29 +57,29 @@ def _render_reasoning(reasoning: object) -> None:
         extracted = _extract_first_json_block(text)
         if extracted is not None:
             obj, before = extracted
-            if before:
-                st.write(before)
+            # Hide leading preamble in main view; make it available in an expander
             _render_parsed_json(obj)
+            if before:
+                with st.expander("Show LLM preamble"):
+                    st.markdown(before)
             return
 
-        # Long content → preview + expander
-        if len(text) > 500 or text.count("\n") > 6:
-            preview = text[:400].rstrip()
-            if len(text) > 400:
-                preview += "..."
-            st.write(preview)
+        # Try to extract structured fields from free text first
+        parsed = _best_effort_extract_fields(text)
+        if parsed:
+            _render_parsed_json(parsed)
+            # Keep full text accessible but not front-and-center
             with st.expander("Show full reasoning"):
                 st.markdown(text)
-            # As a last resort, attempt to extract key fields with regex to show a table
-            parsed = _best_effort_extract_fields(text)
-            if parsed:
-                _render_parsed_json(parsed)
-            else:
-                pass
         else:
-            parsed = _best_effort_extract_fields(text)
-            if parsed:
-                _render_parsed_json(parsed)
+            # Long content → preview + expander fallback
+            if len(text) > 500 or text.count("\n") > 6:
+                preview = text[:400].rstrip()
+                if len(text) > 400:
+                    preview += "..."
+                st.write(preview)
+                with st.expander("Show full reasoning"):
+                    st.markdown(text)
             else:
                 st.markdown(text)
         return
@@ -166,7 +173,7 @@ def _render_parsed_json(obj: dict) -> None:
         table = pd.DataFrame(
             {
                 "Value": [
-                    direction,
+                    humanize_label(direction) if direction is not None else None,
                     confidence,
                     price_target,
                     low,
@@ -243,9 +250,9 @@ def display_prediction_details(prediction_summary: dict, evaluation_summary: dic
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("🎯 Prediction Analysis")
+        st.subheader("Prediction Analysis")
 
-        st.write("**Direction:**", prediction_summary.get("direction", "Unknown"))
+        st.write("**Direction:**", humanize_label(prediction_summary.get("direction", "Unknown")))
         st.write("**Confidence:**", f"{prediction_summary.get('confidence', 0):.1f}%")
 
         price_target = prediction_summary.get("price_target")
@@ -254,11 +261,11 @@ def display_prediction_details(prediction_summary: dict, evaluation_summary: dic
         else:
             st.write("**Price Target:**", "N/A")
 
-        st.subheader("🧠 Reasoning")
+        st.subheader("Reasoning")
         reasoning = prediction_summary.get("reasoning", "No reasoning provided")
         _render_reasoning(reasoning)
 
-        st.subheader("🔑 Key Factors")
+        st.subheader("Key Factors")
         key_factors = prediction_summary.get("key_factors", [])
         if key_factors:
             for factor in key_factors:
@@ -267,7 +274,7 @@ def display_prediction_details(prediction_summary: dict, evaluation_summary: dic
             st.write("No key factors identified")
 
     with col2:
-        st.subheader("📊 Evaluation Results")
+        st.subheader("Evaluation Results")
 
         overall_score = evaluation_summary.get("overall_score", 0)
         st.metric("Overall Score", f"{overall_score:.1f}/100")

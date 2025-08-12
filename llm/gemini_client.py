@@ -1,6 +1,7 @@
 import google.generativeai as genai
 import os
 from typing import Dict, Any, Tuple
+from utils.errors import ErrorInfo, safe_response
 from dotenv import load_dotenv
 import json
 
@@ -90,8 +91,8 @@ Be conservative in your predictions and always consider market volatility.
                 return self._parse_fallback_response(response.text)
                 
         except Exception as e:
-            print(f"Error in Gemini analysis: {str(e)}")
-            return self._get_default_prediction()
+            err = ErrorInfo(code="llm_gemini_error", message=str(e), provider="gemini", retryable=True)
+            return safe_response(self._get_default_prediction(), err)
     
     def _validate_prediction(self, prediction: Dict[str, Any]) -> Dict[str, Any]:
         """Validate and clean the prediction data."""
@@ -190,16 +191,9 @@ def get_gemini_prediction(analysis_summary: str) -> Dict[str, Any]:
         client = GeminiClient()
         return client.analyze_stock_data(analysis_summary)
     except Exception as e:
-        print(f"Gemini prediction failed: {str(e)}")
-        return {
-            "direction": "NEUTRAL",
-            "confidence": 50.0,
-            "price_target": None,
-            "price_range": {"low": None, "high": None},
-            "reasoning": f"Prediction failed: {str(e)}",
-            "key_factors": ["Analysis failed"],
-            "risk_factors": ["Unable to assess risks"]
-        }
+        err = ErrorInfo(code="llm_gemini_error", message=str(e), provider="gemini", retryable=True)
+        default_payload = GeminiClient()._get_default_prediction()
+        return safe_response(default_payload, err)
 
 def get_gemini_client():
     """

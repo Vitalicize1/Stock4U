@@ -43,7 +43,7 @@ def display_market_data(ticker: str) -> None:
             st.metric("Market Cap", f"${info.get('marketCap', 0):,.0f}")
 
         # Create price chart
-        st.subheader("📈 Price Chart (Last 5 Days)")
+        st.subheader("Price Chart (Last 5 Days)")
 
         fig = go.Figure()
         fig.add_trace(go.Candlestick(

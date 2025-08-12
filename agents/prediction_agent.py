@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 import os
 from dotenv import load_dotenv
+from utils.errors import ErrorInfo, safe_response
 
 # Import LLM clients
 try:
@@ -16,6 +17,10 @@ except ImportError:
 
 # Load environment variables
 load_dotenv()
+
+# Print guard to avoid spamming per-day logs during backtests
+_PRINTED_TA_MODE: set[tuple[str, str]] = set()
+
 
 class PredictionAgent:
     """
@@ -74,9 +79,15 @@ class PredictionAgent:
             # Use enhanced analysis if available, otherwise fall back to basic
             if enhanced_technical_analysis:
                 technical_analysis = enhanced_technical_analysis
-                print(f"🔍 Using enhanced technical analysis for {ticker}")
+                key = (str(ticker), "enhanced")
+                if key not in _PRINTED_TA_MODE:
+                    print(f"🔍 Using enhanced technical analysis for {ticker}")
+                    _PRINTED_TA_MODE.add(key)
             else:
-                print(f"⚠️ Using basic technical analysis for {ticker}")
+                key = (str(ticker), "basic")
+                if key not in _PRINTED_TA_MODE:
+                    print(f"⚠️ Using basic technical analysis for {ticker}")
+                    _PRINTED_TA_MODE.add(key)
             
             # Ensure we have the expected structure for both basic and enhanced analysis
             if not technical_analysis:
@@ -176,11 +187,67 @@ class PredictionAgent:
             return result
             
         except Exception as e:
-            return {
+            # DEMO mode fallback: serve known-good cached artifacts if available
+            try:
+                if os.getenv("DEMO_MODE", "0") == "1":
+                    from pathlib import Path
+                    import json as _json
+                    ticker = data.get("ticker", "UNKNOWN")
+                    timeframe = str(data.get("timeframe", "1d"))
+                    demo_path = Path("cache") / "demo" / f"{ticker}_{timeframe}.json"
+                    if demo_path.exists():
+                        with open(demo_path, "r", encoding="utf-8") as f:
+                            demo = _json.load(f)
+                        # Normalize: support either direct prediction_result or normalized schema
+                        if "prediction_result" in demo:
+                            demo_out = {
+                                "status": "success",
+                                "prediction_result": demo.get("prediction_result"),
+                                "final_prediction": demo.get("final_prediction", {}),
+                                "next_agent": "risk_assessor",
+                                "error_info": {
+                                    "code": "demo_fallback",
+                                    "message": "Demo mode served cached artifact.",
+                                    "ts": datetime.now().isoformat(),
+                                },
+                            }
+                            return demo_out
+                        # Normalized result → build expected keys
+                        if "prediction" in demo:
+                            pred = demo.get("prediction", {})
+                            cm = demo.get("confidence_metrics", {})
+                            rec = demo.get("recommendation", {})
+                            final_prediction = {
+                                "ticker": ticker,
+                                "timestamp": datetime.now().isoformat(),
+                                "prediction": pred,
+                                "confidence_metrics": cm,
+                                "risk_assessment": {},
+                                "recommendation": rec,
+                                "llm_provider": self.llm_provider,
+                                "llm_available": self.llm_available,
+                                "sentiment_integration": demo.get("sentiment_integration", {}),
+                                "prediction_engine": "demo",
+                            }
+                            return {
+                                "status": "success",
+                                "prediction_result": pred,
+                                "final_prediction": final_prediction,
+                                "next_agent": "risk_assessor",
+                                "error_info": {
+                                    "code": "demo_fallback",
+                                    "message": "Demo mode served cached artifact.",
+                                    "ts": datetime.now().isoformat(),
+                                },
+                            }
+            except Exception:
+                pass
+            err = ErrorInfo(code="prediction_agent_error", message=str(e), provider="agent", retryable=True)
+            return safe_response({
                 "status": "error",
                 "error": str(e),
                 "next_agent": "error_handler"
-            }
+            }, err)
     
     def _create_comprehensive_analysis_summary(self, ticker: str, price_data: Dict, 
                                              technical_analysis: Dict, sentiment_analysis: Dict,

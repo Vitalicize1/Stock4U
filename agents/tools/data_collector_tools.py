@@ -25,6 +25,7 @@ from dotenv import load_dotenv
 import hashlib
 import pickle
 from pathlib import Path
+from utils.logger import emit_alert
 
 # Load environment variables
 load_dotenv()
@@ -39,6 +40,21 @@ class DataCollectorTools:
         self.cache_dir = Path("cache/data_collector")
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.session = requests.Session()
+        self.max_retries = int(os.getenv("DC_MAX_RETRIES", "3"))
+        self.base_backoff = float(os.getenv("DC_BACKOFF_SECONDS", "0.5"))
+
+    def _retry(self, fn, *args, **kwargs):
+        """Retry helper with exponential backoff."""
+        last_err: Exception | None = None
+        for attempt in range(self.max_retries):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as e:
+                last_err = e
+                time.sleep(self.base_backoff * (2 ** attempt))
+        if last_err is not None:
+            raise last_err
+        raise RuntimeError("retry failed without exception")
     
     def _get_cache_key(self, ticker: str, data_type: str, period: str = "1d") -> str:
         """Generate cache key for data."""
@@ -93,8 +109,21 @@ def collect_price_data(ticker: str, period: str = "3mo", interval: str = "1d") -
             return cached_data
         
         # Fetch fresh data
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period=period, interval=interval)
+        dct = DataCollectorTools()
+        def _fetch_hist():
+            stock = yf.Ticker(ticker)
+            return stock.history(period=period, interval=interval)
+        try:
+            hist = dct._retry(_fetch_hist)
+        except Exception as e:
+            emit_alert("Price data fetch failed", f"{ticker} {period} {interval}: {e}", level="error")
+            return {
+                "status": "error",
+                "error": f"No price data available for {ticker}: {str(e)}",
+                "ticker": ticker,
+                "period": period,
+                "interval": interval
+            }
         
         if hist.empty:
             return {
@@ -174,8 +203,19 @@ def collect_company_info(ticker: str) -> Dict[str, Any]:
         if cached_data:
             return cached_data
         
-        stock = yf.Ticker(ticker)
-        info = stock.info
+        dct = DataCollectorTools()
+        def _fetch_info():
+            stock = yf.Ticker(ticker)
+            return stock.info, stock
+        try:
+            info, stock = dct._retry(_fetch_info)
+        except Exception as e:
+            emit_alert("Company info fetch failed", f"{ticker}: {e}", level="error")
+            return {
+                "status": "error",
+                "error": f"Failed to collect company info: {str(e)}",
+                "ticker": ticker
+            }
         
         # Get additional data
         try:
@@ -291,10 +331,13 @@ def collect_market_data(ticker: str) -> Dict[str, Any]:
             "vix": "^VIX"
         }
         
+        dct = DataCollectorTools()
         for index_name, index_symbol in indices.items():
             try:
-                index_data = yf.Ticker(index_symbol)
-                hist = index_data.history(period="5d")
+                def _fetch_idx():
+                    index_data = yf.Ticker(index_symbol)
+                    return index_data.history(period="5d")
+                hist = dct._retry(_fetch_idx)
                 
                 if not hist.empty:
                     latest = hist.iloc[-1]
@@ -360,8 +403,20 @@ def calculate_technical_indicators(ticker: str, period: str = "3mo") -> Dict[str
         if cached_data:
             return cached_data
         
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period=period)
+        dct = DataCollectorTools()
+        def _fetch_hist_ta():
+            stock = yf.Ticker(ticker)
+            return stock.history(period=period)
+        try:
+            hist = dct._retry(_fetch_hist_ta)
+        except Exception as e:
+            emit_alert("Technical history fetch failed", f"{ticker} {period}: {e}", level="error")
+            return {
+                "status": "error",
+                "error": f"No data available for technical analysis of {ticker}: {str(e)}",
+                "ticker": ticker,
+                "period": period
+            }
         
         if hist.empty:
             return {

@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-import json
-import base64
 import streamlit as st
 
 from dashboard.components.technical_analysis import display_technical_analysis
 from dashboard.components.prediction_details import display_prediction_details
 from dashboard.components.risk_assessment import display_risk_assessment
 from dashboard.components.market_data import display_market_data
+from dashboard.utils import humanize_label
 
 
 def display_results(ticker: str, result: dict) -> None:
     """Display the prediction results in a comprehensive dashboard."""
 
-    st.header(f"📈 Analysis Results for {ticker}")
+    st.header(f"Analysis Results for {ticker}")
     st.markdown("---")
 
     # Prefer new structure if available, even when a final_summary exists
@@ -34,7 +33,7 @@ def display_results(ticker: str, result: dict) -> None:
 
         model_conf = prediction.get("confidence")
         prediction_summary = {
-            "direction": prediction.get("direction", "Unknown"),
+            "direction": humanize_label(prediction.get("direction", "Unknown")),
             "confidence": overall_conf or 0,
             "model_confidence": model_conf if isinstance(model_conf, (int, float)) else None,
             "reasoning": prediction.get("reasoning", "No reasoning provided"),
@@ -54,7 +53,7 @@ def display_results(ticker: str, result: dict) -> None:
         # Extract recommendation (prefer top-level, then nested)
         rec = result.get("recommendation") or prediction_result.get("recommendation", {})
         final_recommendation = {
-            "action": rec.get("action", "HOLD"),
+            "action": humanize_label(rec.get("action", "HOLD")),
             "confidence": prediction_summary.get("confidence", 0)
         }
 
@@ -73,12 +72,24 @@ def display_results(ticker: str, result: dict) -> None:
         prediction_summary = final_summary.get("prediction_summary", {})
         technical_summary = final_summary.get("technical_summary", {})
         evaluation_summary = final_summary.get("evaluation_summary", {})
-        final_recommendation = final_summary.get("final_recommendation", {})
+        # Humanize fields for display
+        final_recommendation_raw = final_summary.get("final_recommendation", {}) or {}
+        final_recommendation = {
+            "action": humanize_label(final_recommendation_raw.get("action", "HOLD")),
+            "confidence": prediction_summary.get("confidence", 0),
+        }
     else:
         st.error("No prediction results available")
         return
 
-    # Normalized, UI-stable JSON result for export/view
+    # Show friendly error banner if available
+    err = result.get("error_info") or result.get("prediction_result", {}).get("error_info")
+    if isinstance(err, dict):
+        code = err.get("code", "error")
+        msg = err.get("message", "An internal error occurred. A safe fallback was used.")
+        st.info(f"Note: {humanize_label(code)} — {msg}")
+
+    # Normalized, UI-stable result for downstream use (e.g., Jira attachment)
     timeframe = result.get("timeframe") or "1d"
     normalized_result = {
         "ticker": ticker,
@@ -92,41 +103,16 @@ def display_results(ticker: str, result: dict) -> None:
         "confidence_metrics": result.get("confidence_metrics") or result.get("prediction_result", {}).get("confidence_metrics", {}),
         "quota_status": result.get("quota_status"),
     }
-
-    # Export and view JSON controls
-    exp_col1, exp_col2, exp_col3 = st.columns([1, 1, 3])
-    json_text = json.dumps(normalized_result, indent=2, default=str)
-    # Make available to other components (e.g., Jira attachment)
+    # Store normalized result in session for optional integrations (no UI controls)
     st.session_state['normalized_result'] = normalized_result
-    with exp_col1:
-        st.download_button(
-            label="💾 Export JSON",
-            data=json_text.encode("utf-8"),
-            file_name=f"{ticker}_{timeframe}_analysis.json",
-            mime="application/json",
-            use_container_width=True,
-        )
-    with exp_col2:
-        # Copy JSON button using Clipboard API
-        b64 = base64.b64encode(json_text.encode("utf-8")).decode("ascii")
-        st.markdown(
-            f"""
-            <button style=\"width:100%;padding:0.5rem 0.75rem;border-radius:0.25rem;border:1px solid #888;background:#f0f2f6;cursor:pointer;\"
-                    onclick=\"navigator.clipboard.writeText(atob('{b64}'))\">📋 Copy JSON</button>
-            """,
-            unsafe_allow_html=True,
-        )
-    with exp_col3:
-        with st.expander("View normalized JSON"):
-            st.code(json_text, language="json")
 
     # Create three columns for key metrics
     col1, col2, col3 = st.columns(3)
 
     with col1:
         st.metric(
-            label="🎯 Prediction Direction",
-            value=prediction_summary.get("direction", "Unknown").upper(),
+            label="Prediction Direction",
+            value=prediction_summary.get("direction", "Unknown"),
             delta=None
         )
 
@@ -135,7 +121,7 @@ def display_results(ticker: str, result: dict) -> None:
         model_conf = prediction_summary.get("model_confidence")
         subtitle = None if model_conf is None else f"Model: {model_conf:.1f}%"
         st.metric(
-            label="📊 Confidence (Blended)",
+            label="Confidence (Blended)",
             value=f"{confidence:.1f}%",
             delta=subtitle
         )
@@ -143,7 +129,7 @@ def display_results(ticker: str, result: dict) -> None:
     with col3:
         action = final_recommendation.get("action", "HOLD")
         st.metric(
-            label="💡 Recommendation",
+            label="Recommendation",
             value=action,
             delta=None
         )
@@ -153,18 +139,18 @@ def display_results(ticker: str, result: dict) -> None:
     # Compact sentiment and market context summary cards
     s_col, m_col = st.columns(2)
     with s_col:
-        st.subheader("📰 Sentiment Snapshot")
+        st.subheader("Sentiment Snapshot")
         sa = result.get("sentiment_analysis", {}) or {}
         overall = (sa.get("overall_sentiment", {}) or {})
-        label = overall.get("sentiment_label", "neutral")
+        label = humanize_label(overall.get("sentiment_label", "neutral"))
         score = overall.get("sentiment_score", 0)
-        st.metric("Overall Sentiment", label.title(), f"{score:+.2f}")
+        st.metric("Overall Sentiment", label, f"{score:+.2f}")
         integ = (result.get("sentiment_integration", {}) or {}).get("integrated_analysis", {}) or {}
         if integ:
             st.metric("Integrated Score", f"{float(integ.get('integrated_score', 0)):.1f}/100")
 
     with m_col:
-        st.subheader("📈 Market Snapshot")
+        st.subheader("Market Snapshot")
         market = ((result.get("data", {}) or {}).get("market_data", {}) or {})
         spx = market.get("sp500_current")
         spx_chg = market.get("sp500_change_pct")
@@ -173,15 +159,10 @@ def display_results(ticker: str, result: dict) -> None:
             st.metric("S&P 500", f"{spx:.2f}", f"{spx_chg:+.2f}%")
         st.metric("Market Trend", trend.title())
 
-    # Timings if available
-    if isinstance(result.get("timings"), dict):
-        st.markdown("---")
-        st.subheader("⏱️ Run Timings")
-        for k, v in result["timings"].items():
-            st.write(f"**{k}**: {v}s")
+    # (Run timings removed from UI)
 
     # Create tabs for detailed analysis
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Technical Analysis", "🎯 Prediction Details", "⚠️ Risk Assessment", "📈 Market Data"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Technical Analysis", "Prediction Details", "Risk Assessment", "Market Data"])
 
     with tab1:
         display_technical_analysis(technical_summary, ticker)

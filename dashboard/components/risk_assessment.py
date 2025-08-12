@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import plotly.express as px
+from dashboard.utils import humanize_label
 
 
 def display_risk_assessment(result: dict) -> None:
@@ -124,10 +125,10 @@ def display_risk_assessment(result: dict) -> None:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("⚠️ Risk Assessment")
+        st.subheader("Risk Assessment")
 
-        overall_risk = str(risk_assessment.get("overall_risk_level", "Unknown")).upper()
-        st.metric("Overall Risk Level", overall_risk)
+        overall_risk = risk_assessment.get("overall_risk_level", "Unknown")
+        st.metric("Overall Risk Level", humanize_label(overall_risk))
 
         # Visual risk breakdown
         level_map = {"low": 1, "medium": 2, "high": 3, "unknown": 2, "Unknown": 2}
@@ -141,7 +142,7 @@ def display_risk_assessment(result: dict) -> None:
         df = pd.DataFrame({
             "Risk": [c[0] for c in categories],
             "Level": [level_map.get(str(c[1]).lower(), 2) for c in categories],
-            "Label": [str(c[1]).title() for c in categories],
+            "Label": [humanize_label(c[1]) for c in categories],
         })
         fig = px.bar(df, x="Risk", y="Level", color="Label", range_y=[0, 3], title="Risk Breakdown (0=none, 3=high)",
                      color_discrete_sequence=["#2ca02c", "#ff7f0e", "#d62728", "#1f77b4"])  
@@ -159,11 +160,11 @@ def display_risk_assessment(result: dict) -> None:
             if sentiment_insights:
                 st.write("**Sentiment Impact:**")
                 st.write(f"- Sentiment Score: {sentiment_insights.get('sentiment_score', 0):.3f}")
-                st.write(f"- Sentiment Label: {sentiment_insights.get('sentiment_label', 'Unknown')}")
-                st.write(f"- Impact Assessment: {sentiment_insights.get('impact_assessment', 'Unknown')}")
+                st.write(f"- Sentiment Label: {humanize_label(sentiment_insights.get('sentiment_label', 'Unknown'))}")
+                st.write(f"- Impact Assessment: {humanize_label(sentiment_insights.get('impact_assessment', 'Unknown'))}")
 
     with col2:
-        st.subheader("🚨 Risk Warnings")
+        st.subheader("Risk Warnings")
 
         # Get risk warnings from various sources
         warnings: list[str] = []
@@ -185,7 +186,7 @@ def display_risk_assessment(result: dict) -> None:
         else:
             st.info("No specific risk warnings")
 
-        st.subheader("📋 Next Steps")
+        st.subheader("Next Steps")
 
         # Generate next steps based on analysis
         next_steps: list[str] = []

@@ -60,3 +60,5 @@ Thumbs.db
 .streamlit/
 
 
+.env2
+.env2.pub

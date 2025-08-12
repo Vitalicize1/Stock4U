@@ -267,6 +267,10 @@ def simulate(
     offline: bool = True,
     policy: str = "agent",  # agent|rule|sma20
     outdir: Optional[str] = None,
+    # Optional flags accepted for API compatibility; currently no-op here
+    walk_forward: bool = False,
+    wf_splits: int = 3,
+    tune_thresholds: bool = False,
 ) -> Dict[str, object]:
     hist = _load_history(ticker, period)
     if hist.empty:

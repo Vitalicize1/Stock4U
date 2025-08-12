@@ -537,11 +537,12 @@ def identify_chart_patterns(ticker: str, period: str = "6mo") -> Dict[str, Any]:
                 "error": "No data available for pattern analysis"
             }
         
-        # Get OHLC data
-        open_prices = data['Open'].values
-        high_prices = data['High'].values
-        low_prices = data['Low'].values
-        close_prices = data['Close'].values
+        # Get OHLC data as pandas Series (not numpy). Many downstream
+        # helpers use Series methods like .rolling/.shift and .iloc.
+        open_prices = data['Open']
+        high_prices = data['High']
+        low_prices = data['Low']
+        close_prices = data['Close']
         
         detected_patterns = []
         
@@ -581,9 +582,9 @@ def identify_chart_patterns(ticker: str, period: str = "6mo") -> Dict[str, Any]:
         sma_20 = calculate_sma(close_prices, 20)
         sma_50 = calculate_sma(close_prices, 50)
         
-        current_price = close_prices[-1]
-        current_sma_20 = sma_20[-1]
-        current_sma_50 = sma_50[-1]
+        current_price = float(close_prices.iloc[-1])
+        current_sma_20 = float(sma_20.iloc[-1]) if len(sma_20) else None
+        current_sma_50 = float(sma_50.iloc[-1]) if len(sma_50) else None
         
         trend_patterns = []
         
@@ -744,8 +745,8 @@ def perform_trend_analysis(ticker: str, period: str = "6mo") -> Dict[str, Any]:
                 "error": "No data available for trend analysis"
             }
         
-        close_prices = data['Close'].values
-        current_price = close_prices[-1]
+        close_prices = data['Close']
+        current_price = float(close_prices.iloc[-1])
         
         # Calculate moving averages for different timeframes
         sma_5 = calculate_sma(close_prices, 5)
@@ -800,8 +801,8 @@ def perform_trend_analysis(ticker: str, period: str = "6mo") -> Dict[str, Any]:
         
         # Calculate True Range
         tr1 = high_prices - low_prices
-        tr2 = abs(high_prices - close_prices.shift(1))
-        tr3 = abs(low_prices - close_prices.shift(1))
+        tr2 = (high_prices - close_prices.shift(1)).abs()
+        tr3 = (low_prices - close_prices.shift(1)).abs()
         true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
         atr = calculate_sma(true_range, 14)
         
@@ -813,11 +814,11 @@ def perform_trend_analysis(ticker: str, period: str = "6mo") -> Dict[str, Any]:
         
         # Price position relative to moving averages
         price_position = {
-            "above_sma_5": current_price > sma_5[-1] if len(sma_5) > 0 else False,
-            "above_sma_10": current_price > sma_10[-1] if len(sma_10) > 0 else False,
-            "above_sma_20": current_price > sma_20[-1] if len(sma_20) > 0 else False,
-            "above_sma_50": current_price > sma_50[-1] if len(sma_50) > 0 else False,
-            "above_sma_200": current_price > sma_200[-1] if len(sma_200) > 0 else False
+            "above_sma_5": current_price > float(sma_5.iloc[-1]) if len(sma_5) > 0 else False,
+            "above_sma_10": current_price > float(sma_10.iloc[-1]) if len(sma_10) > 0 else False,
+            "above_sma_20": current_price > float(sma_20.iloc[-1]) if len(sma_20) > 0 else False,
+            "above_sma_50": current_price > float(sma_50.iloc[-1]) if len(sma_50) > 0 else False,
+            "above_sma_200": current_price > float(sma_200.iloc[-1]) if len(sma_200) > 0 else False
         }
         
         return {
@@ -829,11 +830,11 @@ def perform_trend_analysis(ticker: str, period: str = "6mo") -> Dict[str, Any]:
             "adx_strength": current_adx,
             "price_position": price_position,
             "moving_averages": {
-                "sma_5": float(sma_5[-1]) if len(sma_5) > 0 else None,
-                "sma_10": float(sma_10[-1]) if len(sma_10) > 0 else None,
-                "sma_20": float(sma_20[-1]) if len(sma_20) > 0 else None,
-                "sma_50": float(sma_50[-1]) if len(sma_50) > 0 else None,
-                "sma_200": float(sma_200[-1]) if len(sma_200) > 0 else None
+            "sma_5": float(sma_5.iloc[-1]) if len(sma_5) > 0 else None,
+            "sma_10": float(sma_10.iloc[-1]) if len(sma_10) > 0 else None,
+            "sma_20": float(sma_20.iloc[-1]) if len(sma_20) > 0 else None,
+            "sma_50": float(sma_50.iloc[-1]) if len(sma_50) > 0 else None,
+            "sma_200": float(sma_200.iloc[-1]) if len(sma_200) > 0 else None
             }
         }
         
