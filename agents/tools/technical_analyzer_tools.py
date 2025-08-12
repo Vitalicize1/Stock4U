@@ -81,7 +81,12 @@ class TechnicalAnalyzerTools:
         self.pattern_functions = {}  # Simplified without TA-Lib candlestick patterns
     
     def _get_price_data(self, ticker: str, period: str = "6mo") -> pd.DataFrame:
-        """Get price data with 10-minute in-memory and disk caching to avoid repeated API calls."""
+        """Get price data with caching and a strict fetch timeout.
+
+        - Checks in-memory and disk cache first
+        - Falls back to expired disk cache if live fetch times out
+        - Timeout configurable via STOCK4U_TA_TIMEOUT_FETCH (seconds, default 8)
+        """
         try:
             now = datetime.now().timestamp()
             key = (ticker, period)
@@ -95,6 +100,7 @@ class TechnicalAnalyzerTools:
             # Disk cache
             disk_key = f"price_{ticker}_{period}.pkl"
             disk_path = os.path.join(_PRICE_CACHE_DIR, disk_key)
+            expired_df: Optional[pd.DataFrame] = None
             if os.path.exists(disk_path):
                 try:
                     with open(disk_path, "rb") as f:
@@ -104,12 +110,23 @@ class TechnicalAnalyzerTools:
                         if isinstance(df, pd.DataFrame) and not df.empty:
                             _INMEM_PRICE_CACHE[key] = (now, df)
                             return df
+                    else:
+                        # keep expired cache as fallback
+                        expired_df = payload.get("data") if isinstance(payload.get("data"), pd.DataFrame) else None
                 except Exception:
                     pass
 
             # Fetch fresh
-            stock = yf.Ticker(ticker)
-            data = stock.history(period=period)
+            import concurrent.futures as _f
+            timeout_s = int(os.getenv("STOCK4U_TA_TIMEOUT_FETCH", "8"))
+            def _fetch():
+                return yf.Ticker(ticker).history(period=period)
+            with _f.ThreadPoolExecutor(max_workers=1) as pool:
+                fut = pool.submit(_fetch)
+                try:
+                    data = fut.result(timeout=timeout_s)
+                except Exception:
+                    data = expired_df if isinstance(expired_df, pd.DataFrame) else pd.DataFrame()
 
             # Write caches (best-effort)
             if isinstance(data, pd.DataFrame) and not data.empty:

@@ -96,6 +96,8 @@ def display_results(ticker: str, result: dict) -> None:
     # Export and view JSON controls
     exp_col1, exp_col2, exp_col3 = st.columns([1, 1, 3])
     json_text = json.dumps(normalized_result, indent=2, default=str)
+    # Make available to other components (e.g., Jira attachment)
+    st.session_state['normalized_result'] = normalized_result
     with exp_col1:
         st.download_button(
             label="💾 Export JSON",
@@ -170,6 +172,13 @@ def display_results(ticker: str, result: dict) -> None:
         if spx is not None and spx_chg is not None:
             st.metric("S&P 500", f"{spx:.2f}", f"{spx_chg:+.2f}%")
         st.metric("Market Trend", trend.title())
+
+    # Timings if available
+    if isinstance(result.get("timings"), dict):
+        st.markdown("---")
+        st.subheader("⏱️ Run Timings")
+        for k, v in result["timings"].items():
+            st.write(f"**{k}**: {v}s")
 
     # Create tabs for detailed analysis
     tab1, tab2, tab3, tab4 = st.tabs(["📊 Technical Analysis", "🎯 Prediction Details", "⚠️ Risk Assessment", "📈 Market Data"])

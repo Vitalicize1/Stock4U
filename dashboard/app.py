@@ -25,7 +25,7 @@ def main() -> None:
     st.markdown("---")
 
     # Create tabs for different sections (remove workflow tab for end-users)
-    tab1, tab3, tab4 = st.tabs(["📊 Predictions", "💬 Chatbot", "📈 Market Data"])
+    tab1, tab3, tab4, tab5 = st.tabs(["📊 Predictions", "💬 Chatbot", "📈 Market Data", "🚨 Alerts"])
 
     with tab1:
         # Sidebar form so pressing Enter submits and runs prediction
@@ -112,18 +112,48 @@ def main() -> None:
         with st.sidebar.form("jira_issue_form", clear_on_submit=True):
             issue_summary = st.text_input("Summary", placeholder="Short title of the issue")
             issue_description = st.text_area("Description", placeholder="Describe the problem or request")
-            issue_labels = st.text_input("Labels (comma separated)", placeholder="bug,ui,high-priority")
+            issue_type = st.selectbox("Issue Type", ["Task", "Bug", "Story"], index=0)
+            priority = st.selectbox("Priority", ["Lowest", "Low", "Medium", "High", "Highest"], index=2)
+            default_labels = ["stock4u"]
+            issue_labels = st.text_input("Labels (comma separated)", value=",".join(default_labels))
+            attach_json = st.checkbox("Attach current analysis JSON (if available)", value=True)
             submit_issue = st.form_submit_button("Create Jira Issue")
 
         if submit_issue:
             try:
-                from utils.jira import safe_create_issue
+                from utils.jira import safe_create_issue, safe_attach_file
                 labels = [s.strip() for s in (issue_labels or "").split(",") if s.strip()]
-                res = safe_create_issue(issue_summary or "Untitled Issue", issue_description or "", labels=labels)
+                # Map priority via extra fields (works for default scheme)
+                extra_fields = {"priority": {"name": priority}}
+                res = safe_create_issue(
+                    issue_summary or "Untitled Issue",
+                    issue_description or "",
+                    issue_type=issue_type,
+                    labels=labels,
+                    extra_fields=extra_fields,
+                )
                 if res.get("status") == "success":
                     data = res.get("data", {})
                     key = data.get("key") or data.get("id")
-                    st.sidebar.success(f"Created issue: {key}")
+                    issue_url = None
+                    import os
+                    base = os.getenv("JIRA_BASE_URL", "").rstrip("/")
+                    if base and key:
+                        issue_url = f"{base}/browse/{key}"
+                    # Optional attachment: try to write normalized JSON to a temp file
+                    if attach_json and 'normalized_result' in st.session_state:
+                        import json as _json, tempfile
+                        try:
+                            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=f"_{key}.json")
+                            tmp.write(_json.dumps(st.session_state['normalized_result'], indent=2).encode('utf-8'))
+                            tmp.close()
+                            safe_attach_file(key, tmp.name)
+                        except Exception:
+                            pass
+                    if issue_url:
+                        st.sidebar.markdown(f"✅ Created issue: [{key}]({issue_url})")
+                    else:
+                        st.sidebar.success(f"Created issue: {key}")
                 else:
                     st.sidebar.error(f"Failed to create issue: {res.get('error')}")
             except Exception as e:
@@ -226,6 +256,14 @@ def main() -> None:
                 display_market_data(market_ticker)
             except Exception as e:
                 st.error(f"Error fetching market data: {str(e)}")
+
+    with tab5:
+        st.header("🚨 Monitoring & Alerts")
+        st.markdown("---")
+        from dashboard.components.alerts import display_alerts
+        alerts_file = st.text_input("Alerts file path", value="cache/metrics/alerts.log")
+        max_rows = st.slider("Max rows", min_value=20, max_value=500, value=200, step=10)
+        display_alerts(alerts_file, max_rows)
 
 
 # Import placed at end to avoid circular at app import time

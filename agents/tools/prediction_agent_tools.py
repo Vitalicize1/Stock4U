@@ -4,17 +4,22 @@ Prediction Agent Tools
 Toolized helpers for the prediction stage:
 - generate_llm_prediction_tool: delegate to best available LLM and return a prediction
 - generate_rule_based_prediction_tool: fallback prediction when LLM unavailable
+- generate_ml_prediction_tool: ML-based probability of UP
+- ensemble_prediction_tool: combine ML + LLM + rule-based with calibrated weights
 - calculate_confidence_metrics_tool: compute confidence metrics from analysis
 - generate_recommendation_tool: derive a recommendation from prediction + confidence
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime
 from langchain_core.tools import tool
+import math
+
+from utils.result_cache import get_cached_result
 
 
 @tool
-def generate_llm_prediction_tool(analysis_summary: str) -> Dict[str, Any]:
+def generate_llm_prediction_tool(analysis_summary: str, offline: bool = False) -> Dict[str, Any]:
     """
     Generate a prediction using the best available LLM via delegation.
 
@@ -25,6 +30,12 @@ def generate_llm_prediction_tool(analysis_summary: str) -> Dict[str, Any]:
         Dict with keys: prediction_result (dict)
     """
     try:
+        if offline:
+            return {
+                "status": "error",
+                "error": "offline mode enabled; LLM prediction disabled",
+                "prediction_result": None,
+            }
         # Use orchestrator's delegation tool to select provider and call prediction
         from agents.tools.orchestrator_tools import delegate_prediction_agent
 
@@ -114,6 +125,7 @@ def generate_ml_prediction_tool(state: Dict[str, Any]) -> Dict[str, Any]:
         from ml.loader import load_latest_model
         from ml.model import load_default_model
         import numpy as np
+        import pandas as pd
 
         X, feats = build_features_from_state(state)
         artifact = load_latest_model()
@@ -126,7 +138,9 @@ def generate_ml_prediction_tool(state: Dict[str, Any]) -> Dict[str, Any]:
             Xa = np.array(feats_ordered, dtype=float)
             clf = artifact.model
             try:
-                proba = clf.predict_proba(Xa.reshape(1, -1))[:, 1][0]
+                # Use DataFrame with feature names to avoid sklearn warnings and ensure alignment
+                X_df = pd.DataFrame([Xa.tolist()], columns=feature_names)
+                proba = clf.predict_proba(X_df)[:, 1][0]
                 p_up = float(proba)
             except Exception:
                 # Fallback to default linear model if shape mismatch
@@ -167,6 +181,195 @@ def generate_ml_prediction_tool(state: Dict[str, Any]) -> Dict[str, Any]:
             "prediction_result": None
         }
 
+
+def _direction_to_proba_up(pred: Dict[str, Any]) -> Optional[float]:
+    """Best-effort mapping from a prediction dict to P(UP) in [0,1]."""
+    if not isinstance(pred, dict):
+        return None
+    # Preferred explicit probability
+    model = pred.get("model") or {}
+    if isinstance(model, dict) and "proba_up" in model:
+        try:
+            v = float(model["proba_up"]) / (100.0 if model["proba_up"] > 1 else 1.0)
+            return max(0.0, min(1.0, v))
+        except Exception:
+            pass
+
+    direction = str(pred.get("direction", "NEUTRAL")).upper()
+    conf = pred.get("confidence")
+    try:
+        c = float(conf) if conf is not None else 50.0
+    except Exception:
+        c = 50.0
+
+    # Map direction + confidence -> probability
+    # c in [0,100] => delta in [0,0.5]
+    delta = max(0.0, min(100.0, c)) / 200.0
+    base = 0.5 + delta
+    if direction in ("UP", "BUY", "STRONG_BUY"):
+        return max(0.0, min(1.0, base))
+    if direction in ("DOWN", "SELL", "STRONG_SELL"):
+        return 1.0 - max(0.0, min(1.0, base))
+    # Neutral
+    return 0.5
+
+
+@tool
+def ensemble_prediction_tool(state: Dict[str, Any], analysis_summary: str = "", offline: bool = False) -> Dict[str, Any]:
+    """
+    Combine ML + LLM + Rule-Based predictions via weighted voting with optional
+    Platt-style calibration parameters loaded from cache (fitted offline via backtests).
+
+    Inputs:
+        state: Full pipeline state (ticker/timeframe/features)
+        analysis_summary: Summary string for LLM/rule-based tools
+
+    Cache keys used if present (set by offline calibration scripts):
+        - ensemble_weights::{ticker}::{timeframe} -> {"llm": w1, "ml": w2, "rule": w3}
+        - ensemble_platt::{ticker}::{timeframe} -> {"a": a, "b": b}
+    """
+    try:
+        ticker = str(state.get("ticker", "UNKNOWN")).upper()
+        timeframe = str(state.get("timeframe", "1d"))
+
+        # Gather component predictions
+        try:
+            ml_res = generate_ml_prediction_tool.invoke({"state": state})
+        except Exception:
+            ml_res = {"status": "error", "prediction_result": None}
+        if not offline:
+            try:
+                llm_res = generate_llm_prediction_tool.invoke({"analysis_summary": analysis_summary})
+            except Exception:
+                llm_res = {"status": "error", "prediction_result": None}
+        else:
+            llm_res = {"status": "error", "prediction_result": None}
+        try:
+            rule_res = generate_rule_based_prediction_tool.invoke({"analysis_summary": analysis_summary})
+        except Exception:
+            rule_res = {"status": "error", "prediction_result": None}
+
+        ml_pred = (ml_res or {}).get("prediction_result")
+        llm_pred = (llm_res or {}).get("prediction_result")
+        rule_pred = (rule_res or {}).get("prediction_result")
+
+        # Convert to probabilities
+        probs = {}
+        if ml_pred:
+            p = _direction_to_proba_up(ml_pred)
+            if p is not None:
+                probs["ml"] = float(p)
+        if llm_pred:
+            p = _direction_to_proba_up(llm_pred)
+            if p is not None:
+                probs["llm"] = float(p)
+        if rule_pred:
+            p = _direction_to_proba_up(rule_pred)
+            if p is not None:
+                probs["rule"] = float(p)
+
+        if not probs:
+            return {
+                "status": "error",
+                "error": "No component predictions available for ensembling",
+                "prediction_result": None,
+            }
+
+        # Load weights and calibration from cache (if previously calibrated via backtests)
+        default_weights = {"llm": 0.5, "ml": 0.4, "rule": 0.1}
+        w_cached = get_cached_result(
+            f"ensemble_weights::{ticker}::{timeframe}", ttl_seconds=365 * 24 * 3600
+        ) or {}
+        # Guard: if cached AUC/n_samples are weak, prefer equal weights
+        cached_auc = None
+        cached_ns = None
+        try:
+            cached_auc = float(w_cached.get("auc_raw")) if w_cached else None
+        except Exception:
+            cached_auc = None
+        try:
+            cached_ns = int(w_cached.get("n_samples")) if w_cached else None
+        except Exception:
+            cached_ns = None
+
+        weak_cache = (
+            cached_auc is None
+            or cached_auc < 0.52  # barely above random; treat as unreliable
+            or (cached_ns is not None and cached_ns < 30)
+        )
+
+        if weak_cache:
+            # Equal weights over available components
+            eq = 1.0 / float(len(probs))
+            weights = {k: (eq if k in probs else 0.0) for k in set(default_weights) | set(probs)}
+        else:
+            weights = {k: float(w_cached.get(k, default_weights.get(k, 0.0))) for k in set(default_weights) | set(probs)}
+
+        # Normalize to the subset of available models
+        total_w = sum(weights[k] for k in probs.keys())
+        if total_w <= 0:
+            # fallback equal weights on available
+            eq = 1.0 / float(len(probs))
+            weights = {k: (eq if k in probs else 0.0) for k in weights}
+            total_w = 1.0
+        else:
+            for k in weights:
+                if k in probs:
+                    weights[k] = weights[k] / total_w
+                else:
+                    weights[k] = 0.0
+
+        p_ens = sum(weights[k] * probs[k] for k in probs.keys())
+
+        # Platt-style calibration: sigmoid(a*x + b) if available
+        platt = get_cached_result(
+            f"ensemble_platt::{ticker}::{timeframe}", ttl_seconds=365 * 24 * 3600
+        ) or {}
+        try:
+            a = float(platt.get("a"))
+            b = float(platt.get("b"))
+            # If cache judged weak, skip calibration and use raw
+            if weak_cache:
+                p_cal = p_ens
+            else:
+                p_cal = 1.0 / (1.0 + math.exp(-(a * p_ens + b)))
+        except Exception:
+            p_cal = p_ens
+
+        # Map to discrete direction and confidence
+        if p_cal >= 0.55:
+            direction = "UP"
+        elif p_cal <= 0.45:
+            direction = "DOWN"
+        else:
+            direction = "NEUTRAL"
+        confidence = round(abs(p_cal - 0.5) * 200.0, 1)
+
+        pred = {
+            "direction": direction,
+            "confidence": confidence,
+            "model": {
+                "type": "ensemble",
+                "proba_up": round(p_cal * 100.0, 1),
+                "proba_up_raw": round(p_ens * 100.0, 1),
+                "weights": {k: round(float(weights.get(k, 0.0)), 3) for k in sorted(weights.keys())},
+            },
+            "components": {
+                "ml": ml_pred,
+                "llm": llm_pred,
+                "rule": rule_pred,
+                "probs": probs,
+            },
+            "reasoning": "Ensembled ML, LLM, and rule-based predictions with calibrated weights.",
+        }
+
+        return {"status": "success", "prediction_result": pred}
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": f"ensemble prediction failed: {e}",
+            "prediction_result": None,
+        }
 
 @tool
 def calculate_confidence_metrics_tool(technical_analysis: Dict[str, Any],

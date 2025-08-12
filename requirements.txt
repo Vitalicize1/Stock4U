@@ -16,3 +16,6 @@ langchain-tavily
 scikit-learn
 joblib
 mcp[cli]==1.12.4
+fastapi
+uvicorn[standard]
+optuna

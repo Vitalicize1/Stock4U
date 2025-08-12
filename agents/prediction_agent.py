@@ -93,30 +93,49 @@ class PredictionAgent:
             company_info = data.get("data", {}).get("company_info", {})
             market_data = data.get("data", {}).get("market_data", {})
             
-            # Create comprehensive analysis summary for LLM
+            # Create comprehensive analysis summary for LLM/ensemble
             analysis_summary = self._create_comprehensive_analysis_summary(
                 ticker, price_data, technical_analysis, sentiment_analysis,
                 sentiment_integration, company_info, market_data
             )
 
-            # Optional ML path (when requested)
-            use_ml_model = bool(data.get("use_ml_model", False))
-            prediction_engine = "llm"
+            # 1) Try ensemble first (combines ML + LLM + rule)
+            prediction_engine = "ensemble"
             prediction_result = None
-            if use_ml_model:
-                try:
-                    from agents.tools.prediction_agent_tools import generate_ml_prediction_tool
-                    ml_res = generate_ml_prediction_tool.invoke({"state": data})
-                    if ml_res.get("status") == "success" and ml_res.get("prediction_result"):
-                        prediction_result = ml_res.get("prediction_result")
-                        prediction_engine = "ml"
-                except Exception:
-                    prediction_result = None
+            try:
+                from agents.tools.prediction_agent_tools import ensemble_prediction_tool
+                ens = ensemble_prediction_tool.invoke({
+                    "state": data,
+                    "analysis_summary": analysis_summary,
+                    "offline": bool(data.get("low_api_mode", False)),
+                })
+                if ens.get("status") == "success" and ens.get("prediction_result"):
+                    prediction_result = ens.get("prediction_result")
+                    prediction_engine = "ensemble"
+            except Exception:
+                prediction_result = None
 
-            # If ML not used or failed, fall back to LLM + rule-based
+            # 2) Optional ML direct path (if explicitly requested)
             if not prediction_result:
-                prediction_result = self._generate_llm_prediction(analysis_summary)
-                prediction_engine = "llm"
+                use_ml_model = bool(data.get("use_ml_model", False))
+                if use_ml_model:
+                    try:
+                        from agents.tools.prediction_agent_tools import generate_ml_prediction_tool
+                        ml_res = generate_ml_prediction_tool.invoke({"state": data})
+                        if ml_res.get("status") == "success" and ml_res.get("prediction_result"):
+                            prediction_result = ml_res.get("prediction_result")
+                            prediction_engine = "ml"
+                    except Exception:
+                        prediction_result = None
+
+            # 3) Fallback to LLM + rule-based (skip LLM if low_api_mode)
+            if not prediction_result:
+                if bool(data.get("low_api_mode", False)):
+                    prediction_result = self._generate_rule_based_prediction(analysis_summary)
+                    prediction_engine = "rule"
+                else:
+                    prediction_result = self._generate_llm_prediction(analysis_summary)
+                    prediction_engine = "llm"
             
             # Calculate confidence and risk metrics
             # Compute confidence metrics using tool

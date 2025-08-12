@@ -6,6 +6,8 @@ import os
 from typing import Any, Dict, Optional
 
 import requests
+import time
+import hashlib
 
 
 class JiraClient:
@@ -120,6 +122,14 @@ class JiraClient:
         res.raise_for_status()
         return res.json()
 
+    def search_by_label(self, label: str, max_results: int = 1) -> Dict[str, Any]:
+        url = f"{self.base_url}/rest/api/3/search"
+        jql = f'project = {self.project_key} AND labels = "{label}" AND resolution = Unresolved ORDER BY updated DESC'
+        params = {"jql": jql, "maxResults": max_results}
+        res = requests.get(url, headers=self._auth_header, params=params, timeout=15)
+        res.raise_for_status()
+        return res.json()
+
 
 def safe_create_issue(summary: str, description: str, **kwargs) -> Dict[str, Any]:
     """Best-effort issue creation. Returns dict with status and optional data/error."""
@@ -130,7 +140,24 @@ def safe_create_issue(summary: str, description: str, **kwargs) -> Dict[str, Any
             api_token=kwargs.get("api_token"),
             project_key=kwargs.get("project_key"),
         )
-        data = client.create_issue(summary, description, issue_type=kwargs.get("issue_type", "Task"), labels=kwargs.get("labels"))
+        # Optional dedup: if dedup_key provided, search by label first
+        dedup_key = kwargs.get("dedup_key")
+        if dedup_key:
+            try:
+                existing = client.search_by_label(dedup_key, max_results=1)
+                issues = existing.get("issues", [])
+                if issues:
+                    return {"status": "duplicate", "issue": issues[0]}
+            except Exception:
+                pass
+
+        data = client.create_issue(
+            summary,
+            description,
+            issue_type=kwargs.get("issue_type", "Task"),
+            labels=(kwargs.get("labels") or []) + ([dedup_key] if dedup_key else []),
+            extra_fields=kwargs.get("extra_fields"),
+        )
         return {"status": "success", "data": data}
     except Exception as e:
         return {"status": "error", "error": str(e)}
@@ -146,6 +173,20 @@ def safe_test_connection(**kwargs) -> Dict[str, Any]:
             project_key=kwargs.get("project_key"),
         )
         return client.test_connection()
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+def safe_attach_file(issue_key: str, file_path: str, **kwargs) -> Dict[str, Any]:
+    try:
+        client = JiraClient(
+            base_url=kwargs.get("base_url"),
+            email=kwargs.get("email"),
+            api_token=kwargs.get("api_token"),
+            project_key=kwargs.get("project_key", os.getenv("JIRA_PROJECT_KEY", "")),
+        )
+        data = client.attach_file(issue_key, file_path)
+        return {"status": "success", "data": data}
     except Exception as e:
         return {"status": "error", "error": str(e)}
 

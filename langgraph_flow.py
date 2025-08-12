@@ -94,6 +94,8 @@ from llm.gemini_client import get_gemini_client
 from llm.groq_client import get_groq_client
 from utils.result_cache import get_cached_result, set_cached_result
 from functools import lru_cache
+import time
+from utils.logger import get_logger
 
 # Define the state schema for LangGraph
 class AgentState(TypedDict):
@@ -1030,7 +1032,8 @@ User request: {input}"""
         lambda x: END
     )
     
-    return workflow.compile()
+    compiled = workflow.compile()
+    return compiled
 
 @lru_cache(maxsize=1)
 def build_chatbot_graph():
@@ -1261,7 +1264,11 @@ def run_prediction(ticker: str, timeframe: str = "1d", *args, **kwargs):
     input_data["low_api_mode"] = low_api_mode
     input_data["fast_ta_mode"] = fast_ta_mode
     input_data["use_ml_model"] = use_ml_model
+    logger = get_logger("stock4u.run")
+    timings = {}
+    start = time.time()
     result = graph.invoke(input_data)
+    timings["total_s"] = round(time.time() - start, 3)
     
     # Add quota status to result for user information
     result["quota_status"] = quota_status
@@ -1283,6 +1290,8 @@ def run_prediction(ticker: str, timeframe: str = "1d", *args, **kwargs):
         set_cached_result(cache_key, result)
     except Exception:
         pass
+    # Attach timings for UI
+    result["timings"] = timings
     
     return result
 

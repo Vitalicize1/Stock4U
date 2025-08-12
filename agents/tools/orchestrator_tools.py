@@ -398,13 +398,36 @@ def handle_workflow_error(error: str, stage: str) -> Dict[str, Any]:
             "recommended_action": "retry" if "retry" in recovery_options else "skip_stage",
             "error_timestamp": datetime.now().isoformat()
         }
-        # Optionally create a Jira issue for the error
+        # Optionally create or deduplicate a Jira issue for the error
         if _jira_create_issue is not None and error:
+            import hashlib, json as _json, tempfile
+            dedup_key = f"stock4u_error_{hashlib.md5(f'{stage}|{error}'.encode('utf-8')).hexdigest()}"
             summary = f"Stock4U error in {stage}: {str(error)[:80]}"
-            desc = f"Auto-generated from Stock4U.\n\nStage: {stage}\nError: {error}"
+            desc = (
+                "Auto-generated from Stock4U.\n\n" +
+                f"Stage: {stage}\n" +
+                f"Error: {error}\n" +
+                ("\nContext:\n```\n" + _json.dumps(response)[:5000] + "\n```" if response else "")
+            )
             try:
-                jira_res = _jira_create_issue(summary, desc)
+                jira_res = _jira_create_issue(summary, desc, issue_type="Bug", labels=["stock4u", f"stage:{stage}"], dedup_key=dedup_key)
                 response["jira"] = jira_res
+                # If we created a new issue, optionally attach context JSON file
+                key = None
+                if isinstance(jira_res, dict):
+                    if jira_res.get("status") == "success":
+                        key = (jira_res.get("data") or {}).get("key")
+                    elif jira_res.get("status") == "duplicate":
+                        key = (jira_res.get("issue") or {}).get("key")
+                if key:
+                    try:
+                        from utils.jira import safe_attach_file
+                        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=f"_{key}_context.json")
+                        tmp.write(_json.dumps(response, indent=2).encode("utf-8"))
+                        tmp.close()
+                        safe_attach_file(key, tmp.name)
+                    except Exception:
+                        pass
             except Exception:
                 pass
         return response
