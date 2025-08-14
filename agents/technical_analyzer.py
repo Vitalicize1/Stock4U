@@ -926,13 +926,21 @@ def analyze_technical_with_tools(state: Dict[str, Any]) -> Dict[str, Any]:
         # If tools have been executed, process the results
         tool_results = state.get("tool_results", {})
         
-        # Extract results from tool execution
-        advanced_indicators = tool_results.get("calculate_advanced_indicators", {})
-        chart_patterns = tool_results.get("identify_chart_patterns", {})
-        support_resistance = tool_results.get("analyze_support_resistance", {})
-        trend_analysis = tool_results.get("perform_trend_analysis", {})
-        trading_signals = tool_results.get("generate_trading_signals", {})
-        validation = tool_results.get("validate_technical_analysis", {})
+        # Extract results from tool execution (tools may return either {status, data} or a flat dict)
+        def _unpack(res: dict) -> dict:
+            if isinstance(res, dict):
+                data = res.get("data")
+                if isinstance(data, dict):
+                    return data
+                return res
+            return {}
+
+        advanced_indicators = _unpack(tool_results.get("calculate_advanced_indicators", {}))
+        chart_patterns = _unpack(tool_results.get("identify_chart_patterns", {}))
+        support_resistance = _unpack(tool_results.get("analyze_support_resistance", {}))
+        trend_analysis = _unpack(tool_results.get("perform_trend_analysis", {}))
+        trading_signals = _unpack(tool_results.get("generate_trading_signals", {}))
+        validation = _unpack(tool_results.get("validate_technical_analysis", {}))
         
         # Validate results
         if advanced_indicators.get("status") == "error":
@@ -944,13 +952,13 @@ def analyze_technical_with_tools(state: Dict[str, Any]) -> Dict[str, Any]:
         
         # Combine all technical analysis results
         enhanced_technical_analysis = {
-            "indicators": advanced_indicators.get("data", {}),
-            "patterns": chart_patterns.get("data", {}),
-            "support_resistance": support_resistance.get("data", {}),
-            "trend_analysis": trend_analysis.get("data", {}),
-            "trading_signals": trading_signals.get("data", {}),
-            "validation": validation.get("data", {}),
-            "technical_score": validation.get("data", {}).get("technical_score", 0),
+            "indicators": advanced_indicators,
+            "patterns": chart_patterns,
+            "support_resistance": support_resistance,
+            "trend_analysis": trend_analysis,
+            "trading_signals": trading_signals,
+            "validation": validation,
+            "technical_score": validation.get("technical_score", 0),
             "analysis_timestamp": datetime.now().isoformat()
         }
         
