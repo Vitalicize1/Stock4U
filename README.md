@@ -6,6 +6,7 @@ A multi-agent stock analysis system built with LangGraph, Streamlit, and yfinanc
 
 - Multi-agent LangGraph workflow (orchestrator, data collection, technical analysis, prediction, evaluation, elicitation)
 - Streamlit dashboard with predictions, chatbot assistant, and market data
+- **MCP (Model Context Protocol) server** for AI integration and external tool access
 ## Production notes (auth, learning, monitoring)
 
 - API auth: set `API_TOKEN` (any strong token) and call endpoints with header `Authorization: Bearer <token>`.
@@ -107,6 +108,21 @@ from langgraph_flow import run_prediction
 result = run_prediction("AAPL", timeframe="1d", low_api_mode=False)
 print(result)
 ```
+
+### MCP Server (AI Integration)
+
+```bash
+# Start MCP server
+python -m agents.mcp_server
+
+# Test with MCP CLI
+mcp dev agents.mcp_server --tool ping
+
+# Run demo
+python examples/mcp_demo.py
+```
+
+**📖 See [MCP Integration Guide](docs/MCP_INTEGRATION_GUIDE.md) for detailed examples and use cases.**
 
 ## Tests
 

@@ -12,6 +12,8 @@ import yfinance as yf
 from langgraph_flow import run_prediction, run_chatbot_workflow
 
 from dashboard.views.results import display_results
+from dashboard.auth import show_login_page, show_logout_button, show_user_info, init_auth
+from dashboard.components.market_data import display_market_data
 
 
 def main() -> None:
@@ -49,39 +51,152 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
+    # Initialize authentication
+    auth = init_auth()
+    
+    # Check if user is authenticated
+    if not auth.is_authenticated():
+        show_login_page()
+        return
+
     st.title("Stock4U")
     st.markdown("---")
 
-    # Create tabs for different sections (remove workflow tab for end-users)
-    tab1, tab3, tab4, tab5 = st.tabs(["Predictions", "Chatbot", "Market Data", "Alerts"])
+    # Create tabs for different sections
+    tab1, tab2, tab3, tab4 = st.tabs(["Predictions", "Daily Picks & Analysis", "Chatbot", "Market Data"])
+
+    # Show user info and logout button in sidebar
+    show_user_info()
+    show_logout_button()
 
     with tab1:
-        # Sidebar form so pressing Enter submits and runs prediction
-        st.sidebar.header("Prediction Settings")
+        st.header("Stock Predictions")
+        st.markdown("Analyze any stock with our AI-powered prediction system.")
+        
+        # Initialize session state
         if "has_prediction_results" not in st.session_state:
             st.session_state["has_prediction_results"] = False
-        with st.sidebar.form("prediction_form", clear_on_submit=False):
-            ticker_input = st.text_input(
-                "Enter Stock Ticker",
-                value="AAPL",
-                placeholder="e.g., AAPL, MSFT, GOOGL"
-            )
-            timeframe = st.selectbox(
-                "Prediction Timeframe",
-                options=["1d", "1w", "1m"],
-                index=0
-            )
-            low_api_mode = st.toggle("Low API mode (no LLM for prediction)", value=False, help="Use rule-based prediction and skip LLM calls to save quota.")
-            fast_ta_mode = st.toggle("Fast TA mode (quicker technical analysis)", value=False, help="Run a minimal technical analysis (skip heavy indicators/patterns) for speed.")
-            use_ml_model = st.toggle("Use ML model (traditional) for prediction", value=False, help="Run a lightweight ML model using engineered features instead of LLM.")
-            submitted = st.form_submit_button("Run Prediction")
-
+        
+        # Create two columns for the prediction form
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            # Main prediction form
+            with st.form("prediction_form", clear_on_submit=False):
+                st.subheader("Stock Analysis")
+                
+                # Ticker input with better styling
+                ticker_input = st.text_input(
+                    "Stock Ticker Symbol",
+                    value="AAPL",
+                    placeholder="e.g., AAPL, MSFT, GOOGL, TSLA",
+                    help="Enter the stock ticker symbol you want to analyze"
+                )
+                
+                # Timeframe selection
+                timeframe = st.selectbox(
+                    "Prediction Timeframe",
+                    options=["1d", "1w", "1m"],
+                    index=0,
+                    help="Select how far into the future to predict"
+                )
+                
+                # Analysis options in an expander
+                with st.expander("Analysis Options", expanded=False):
+                    st.markdown("**Choose your analysis mode:**")
+                    
+                    low_api_mode = st.toggle(
+                        "Low API Mode", 
+                        value=False, 
+                        help="Use rule-based prediction to save API quota (no LLM calls)"
+                    )
+                    
+                    fast_ta_mode = st.toggle(
+                        "Fast Technical Analysis", 
+                        value=False, 
+                        help="Run minimal technical analysis for faster results"
+                    )
+                    
+                    use_ml_model = st.toggle(
+                        "Use ML Model", 
+                        value=False, 
+                        help="Use traditional machine learning instead of LLM"
+                    )
+                
+                # Submit button
+                submitted = st.form_submit_button(
+                    "Run Prediction",
+                    help="Start the AI analysis process"
+                )
+        
+        with col2:
+            # Quick analysis section
+            st.subheader("Quick Analysis")
+            st.markdown("Popular stocks for instant analysis:")
+            
+            popular_tickers = ["AAPL", "MSFT", "GOOGL", "TSLA", "AMZN", "NVDA"]
+            
+            # Create a grid of quick analyze buttons
+            for i in range(0, len(popular_tickers), 2):
+                cols = st.columns(2)
+                for j in range(2):
+                    if i + j < len(popular_tickers):
+                        ticker = popular_tickers[i + j]
+                        with cols[j]:
+                            if st.button(f"{ticker}", key=f"quick_{ticker}"):
+                                with st.spinner(f"Quick analysis of {ticker}..."):
+                                    try:
+                                        result = run_prediction(ticker, "1d", low_api_mode=False, fast_ta_mode=False, use_ml_model=False)
+                                        
+                                        # Log the prediction
+                                        try:
+                                            from utils.prediction_logger import log_prediction
+                                            prediction_data = result.get("prediction_result", {}).get("prediction", {})
+                                            log_prediction(ticker, prediction_data)
+                                        except Exception as e:
+                                            print(f"Warning: Could not log prediction: {e}")
+                                        
+                                        # Store results
+                                        st.session_state["has_prediction_results"] = True
+                                        st.session_state["last_result"] = result
+                                        
+                                        # Build summary
+                                        pr = result.get("prediction_result", {})
+                                        prediction = pr.get("prediction", pr)
+                                        cm = result.get("confidence_metrics") or pr.get("confidence_metrics") or {}
+                                        overall_conf = cm.get("overall_confidence")
+                                        if overall_conf is None:
+                                            overall_conf = prediction.get("confidence")
+                                        
+                                        st.session_state["last_run_summary"] = {
+                                            "ticker": ticker,
+                                            "timeframe": "1d",
+                                            "direction": prediction.get("direction"),
+                                            "confidence": overall_conf,
+                                        }
+                                        
+                                        st.rerun()
+                                        
+                                    except Exception as e:
+                                        st.error(f"Error analyzing {ticker}: {str(e)}")
+        
+        # Handle form submission
         if submitted:
             ticker = (ticker_input or "").upper().strip()
             if ticker:
-                with st.spinner(f"Analyzing {ticker}..."):
+                with st.spinner(f"Analyzing {ticker} with AI..."):
                     try:
                         result = run_prediction(ticker, timeframe, low_api_mode=low_api_mode, fast_ta_mode=fast_ta_mode, use_ml_model=use_ml_model)
+                        
+                        # Log the prediction for accuracy tracking
+                        try:
+                            from utils.prediction_logger import log_prediction
+                            prediction_data = result.get("prediction_result", {}).get("prediction", {})
+                            log_prediction(ticker, prediction_data)
+                        except Exception as e:
+                            print(f"Warning: Could not log prediction: {e}")
+                        
+                        # Show quota status in sidebar if available
                         if 'quota_status' in result:
                             st.sidebar.markdown("---")
                             st.sidebar.header("LLM Provider Status")
@@ -91,149 +206,222 @@ def main() -> None:
                                     st.sidebar.success(f"{provider.upper()}: {status['reason']}")
                                 else:
                                     st.sidebar.error(f"{provider.upper()}: {status['reason']}")
-                        # Store for rendering after sidebar so we can show a banner above results
+                        
+                        # Store results
                         st.session_state["has_prediction_results"] = True
                         st.session_state["last_result"] = result
-                        # Build last run summary
+                        
+                        # Build summary
                         pr = result.get("prediction_result", {})
                         prediction = pr.get("prediction", pr)
                         cm = result.get("confidence_metrics") or pr.get("confidence_metrics") or {}
                         overall_conf = cm.get("overall_confidence")
                         if overall_conf is None:
                             overall_conf = prediction.get("confidence")
+                        
                         st.session_state["last_run_summary"] = {
                             "ticker": ticker,
                             "timeframe": timeframe,
                             "direction": prediction.get("direction"),
                             "confidence": overall_conf,
                         }
+                        
+                        st.rerun()
+                        
                     except Exception as e:
                         st.error(f"Error analyzing {ticker}: {str(e)}")
             else:
                 st.error("Please enter a valid ticker symbol")
 
-        # Quick analysis section
+        # --- Report Issues & Feedback ---
         st.sidebar.markdown("---")
-        st.sidebar.header("Quick Analysis")
+        st.sidebar.header("Report Issues & Feedback")
+        
+        # Help text
+        with st.sidebar.expander("How to report issues", expanded=False):
+            st.markdown("""
+            **Need help? Here's how to report issues:**
+            
+            🐛 **Bug Reports:** Describe what went wrong
+            💡 **Feature Requests:** Suggest improvements
+            ❓ **Questions:** Ask for help or clarification
+            
+            **Tips for better reports:**
+            - Be specific about what you were doing
+            - Include error messages if any
+            - Mention your browser/device if relevant
+            """)
+        
 
-        popular_tickers = ["AAPL", "MSFT", "GOOGL", "TSLA", "AMZN", "NVDA"]
-        selected_quick = st.sidebar.selectbox("Popular Stocks", popular_tickers)
+        
+        # Issue form
+        with st.sidebar.form("issue_form", clear_on_submit=True):
+            st.markdown("**Create a new issue:**")
+            
+            # Issue type with better descriptions
+            issue_type = st.selectbox(
+                "Type of Issue",
+                ["Bug", "Feature Request", "Question", "Task"],
+                index=0,
+                help="Select the most appropriate category for your issue"
+            )
+            
+            # Priority with better labels
+            priority_options = {
+                "Low": "Low - Minor issue or enhancement",
+                "Medium": "Medium - Standard priority",
+                "High": "High - Important issue affecting functionality",
+                "Critical": "Critical - System breaking issue"
+            }
+            priority = st.selectbox(
+                "Priority",
+                list(priority_options.keys()),
+                index=1,
+                help="How urgent is this issue?"
+            )
+            
+            # Summary with better placeholder
+            summary_placeholder = {
+                "Bug": "e.g., 'Login button not working'",
+                "Feature Request": "e.g., 'Add dark mode theme'",
+                "Question": "e.g., 'How to export data?'",
+                "Task": "e.g., 'Update documentation'"
+            }
+            issue_summary = st.text_input(
+                "Title",
+                placeholder=summary_placeholder.get(issue_type, "Brief description of the issue"),
+                help="A clear, concise title for your issue"
+            )
+            
+            # Description with placeholder template
+            description_placeholder = {
+                "Bug": "What happened? What did you expect? Steps to reproduce: 1. 2. 3. Additional details...",
+                "Feature Request": "What feature would you like? Why is this useful? Any examples or mockups?",
+                "Question": "What's your question? What have you tried? Additional context...",
+                "Task": "What needs to be done? Why is this needed? Any specific requirements?"
+            }
+            issue_description = st.text_area(
+                "Description",
+                placeholder=description_placeholder.get(issue_type, "Provide detailed information about your issue"),
+                height=150,
+                help="Provide detailed information about your issue"
+            )
+            
+            # Labels dropdown with predefined options
+            label_options = {
+                "Bug": ["bug", "ui", "backend", "data", "performance", "security"],
+                "Feature Request": ["enhancement", "ui", "backend", "data", "analytics", "export"],
+                "Question": ["question", "help", "documentation", "tutorial", "setup"],
+                "Task": ["task", "documentation", "testing", "refactor", "maintenance"]
+            }
+            
+            # Get available labels for the selected issue type
+            available_labels = label_options.get(issue_type, [])
+            
+            # Always include stock4u as the base label
+            base_label = "stock4u"
+            
+            # Create multi-select for labels
+            selected_labels = st.multiselect(
+                "Labels",
+                options=available_labels,
+                default=["bug"] if issue_type == "Bug" else ["enhancement"] if issue_type == "Feature Request" else ["question"] if issue_type == "Question" else ["task"],
+                help="Select relevant labels to categorize your issue"
+            )
+            
+            # Combine selected labels with base label
+            issue_labels = ",".join([base_label] + selected_labels)
+            
+            # Attach current analysis
+            attach_json = st.checkbox(
+                "Include current analysis data",
+                value=True,
+                help="Attach the current stock analysis data to help with debugging"
+            )
+            
+            # Submit button with better styling
+            submit_issue = st.form_submit_button(
+                "Submit Issue",
+                help="Create the issue in our tracking system"
+            )
 
-        if st.sidebar.button("Quick Analyze"):
-            with st.spinner(f"Quick analysis of {selected_quick}..."):
-                try:
-                    result = run_prediction(selected_quick, "1d", low_api_mode=low_api_mode, fast_ta_mode=fast_ta_mode, use_ml_model=use_ml_model)
-
-                    # Display quota status if available
-                    if 'quota_status' in result:
-                        st.sidebar.markdown("---")
-                        st.sidebar.header("LLM Provider Status")
-
-                        quota_status = result['quota_status']
-                        for provider, status in quota_status.items():
-                            if status["available"]:
-                                st.sidebar.success(f"{provider.upper()}: {status['reason']}")
-                            else:
-                                st.sidebar.error(f"{provider.upper()}: {status['reason']}")
-
-                    st.session_state["has_prediction_results"] = True
-                    st.session_state["has_prediction_results"] = True
-                    st.session_state["last_result"] = result
-                    pr = result.get("prediction_result", {})
-                    prediction = pr.get("prediction", pr)
-                    cm = result.get("confidence_metrics") or pr.get("confidence_metrics") or {}
-                    overall_conf = cm.get("overall_confidence")
-                    if overall_conf is None:
-                        overall_conf = prediction.get("confidence")
-                    st.session_state["last_run_summary"] = {
-                        "ticker": selected_quick,
-                        "timeframe": "1d",
-                        "direction": prediction.get("direction"),
-                        "confidence": overall_conf,
-                    }
-                except Exception as e:
-                    st.error(f"Error in quick analysis: {str(e)}")
-
-        # --- Jira Issue Filing ---
-        st.sidebar.markdown("---")
-        st.sidebar.header("File an Issue")
-        # Connection check button
-        if st.sidebar.button("Test Jira Connection"):
-            try:
-                from utils.jira import safe_test_connection
-                conn = safe_test_connection()
-                if conn.get("status") == "success":
-                    st.sidebar.success(f"Connected. Project: {conn.get('project')}")
-                else:
-                    st.sidebar.error(f"Connection failed: {conn.get('error')}")
-            except Exception as e:
-                st.sidebar.error(f"Jira test failed: {str(e)}")
-        with st.sidebar.form("jira_issue_form", clear_on_submit=True):
-            issue_summary = st.text_input("Summary", placeholder="Short title of the issue")
-            issue_description = st.text_area("Description", placeholder="Describe the problem or request")
-            issue_type = st.selectbox("Issue Type", ["Task", "Bug", "Story"], index=0)
-            priority = st.selectbox("Priority", ["Lowest", "Low", "Medium", "High", "Highest"], index=2)
-            default_labels = ["stock4u"]
-            issue_labels = st.text_input("Labels (comma separated)", value=",".join(default_labels))
-            attach_json = st.checkbox("Attach current analysis JSON (if available)", value=True)
-            submit_issue = st.form_submit_button("Create Jira Issue")
-
+        # Handle form submission
         if submit_issue:
-            try:
-                from utils.jira import safe_create_issue, safe_attach_file
-                labels = [s.strip() for s in (issue_labels or "").split(",") if s.strip()]
-                # Map priority via extra fields (works for default scheme)
-                extra_fields = {"priority": {"name": priority}}
-                res = safe_create_issue(
-                    issue_summary or "Untitled Issue",
-                    issue_description or "",
-                    issue_type=issue_type,
-                    labels=labels,
-                    extra_fields=extra_fields,
-                )
-                if res.get("status") == "success":
-                    data = res.get("data", {})
-                    key = data.get("key") or data.get("id")
-                    issue_url = None
-                    import os
-                    base = os.getenv("JIRA_BASE_URL", "").rstrip("/")
-                    if base and key:
-                        issue_url = f"{base}/browse/{key}"
-                    # Optional attachment: try to write normalized JSON to a temp file
-                    if attach_json and 'normalized_result' in st.session_state:
-                        import json as _json, tempfile
-                        try:
-                            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=f"_{key}.json")
-                            tmp.write(_json.dumps(st.session_state['normalized_result'], indent=2).encode('utf-8'))
-                            tmp.close()
-                            safe_attach_file(key, tmp.name)
-                        except Exception:
-                            pass
-                    if issue_url:
-                        st.sidebar.markdown(f"Created issue: [{key}]({issue_url})")
-                    else:
-                        st.sidebar.success(f"Created issue: {key}")
-                else:
-                    st.sidebar.error(f"Failed to create issue: {res.get('error')}")
-            except Exception as e:
-                st.sidebar.error(f"Jira integration error: {str(e)}")
+            if not issue_summary.strip():
+                st.sidebar.error("Please provide a title for your issue")
+            elif not issue_description.strip():
+                st.sidebar.error("Please provide a description for your issue")
+            else:
+                try:
+                    from utils.jira import safe_create_issue, safe_attach_file
+                    
+                    # Show progress
+                    with st.sidebar.spinner("Creating issue..."):
+                        # Map priority to Jira format
+                        priority_mapping = {
+                            "Low": "Low",
+                            "Medium": "Medium", 
+                            "High": "High",
+                            "Critical": "Highest"
+                        }
+                        
+                        # Map issue type to Jira format
+                        type_mapping = {
+                            "Bug": "Bug",
+                            "Feature Request": "Story",
+                            "Question": "Task",
+                            "Task": "Task"
+                        }
+                        
+                        labels = [s.strip() for s in (issue_labels or "").split(",") if s.strip()]
+                        extra_fields = {"priority": {"name": priority_mapping.get(priority, "Medium")}}
+                        
+                        res = safe_create_issue(
+                            issue_summary.strip(),
+                            issue_description.strip(),
+                            issue_type=type_mapping.get(issue_type, "Task"),
+                            labels=labels,
+                            extra_fields=extra_fields,
+                        )
+                        
+                        if res.get("status") == "success":
+                            data = res.get("data", {})
+                            key = data.get("key") or data.get("id")
+                            
+                            # Create issue URL
+                            import os
+                            base = os.getenv("JIRA_BASE_URL", "").rstrip("/")
+                            issue_url = f"{base}/browse/{key}" if base and key else None
+                            
+                            # Attach analysis data if requested
+                            if attach_json and 'last_result' in st.session_state:
+                                import json as _json, tempfile
+                                try:
+                                    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=f"_{key}.json")
+                                    tmp.write(_json.dumps(st.session_state['last_result'], indent=2).encode('utf-8'))
+                                    tmp.close()
+                                    safe_attach_file(key, tmp.name)
+                                except Exception:
+                                    pass
+                            
+                            # Show success message
+                            st.sidebar.success("Issue created successfully!")
+                            if issue_url:
+                                st.sidebar.markdown(f"**Issue:** [{key}]({issue_url})")
+                            else:
+                                st.sidebar.markdown(f"**Issue ID:** {key}")
+                            
+                            # Show next steps
+                            st.sidebar.info("📧 You'll receive updates via email when the issue is updated.")
+                            
+                        else:
+                            st.sidebar.error(f"Failed to create issue: {res.get('error')}")
+                            
+                except Exception as e:
+                    st.sidebar.error(f"Error creating issue: {str(e)}")
+                    st.sidebar.info("Please try again or contact support directly.")
 
-        # Render Daily Top Picks
-        st.markdown("---")
-        try:
-            from dashboard.components.daily_picks import display_daily_picks
-            # Allow users to paste a large custom universe; keep defaults if empty.
-            with st.expander("Daily Picks Universe (optional)"):
-                custom_universe_text = st.text_area(
-                    "Tickers (comma or newline separated)",
-                    value="",
-                    height=80,
-                    help="Provide a custom list to scan. If empty, a curated default list is used. For very large lists, a rotating subset is scanned daily.",
-                )
-                max_scan = st.slider("Max tickers to scan today", min_value=50, max_value=1000, value=200, step=50)
-            display_daily_picks(custom_tickers_text=custom_universe_text, max_scan=max_scan, top_n=3)
-        except Exception as e:
-            st.info(f"Daily picks unavailable: {e}")
+
 
         # Render last run summary and results (if present), else placeholder
         if st.session_state.get("has_prediction_results", False) and st.session_state.get("last_result") is not None:
@@ -254,6 +442,120 @@ def main() -> None:
             st.write(
                 "Use the form in the sidebar to run a prediction. Choose a ticker and timeframe, then click Run Prediction."
             )
+
+    with tab2:
+        st.header("Daily Picks & Analysis")
+        st.markdown("Today's best stock recommendations with detailed analysis.")
+        
+        # Display prediction accuracy summary
+        try:
+            from utils.prediction_logger import get_accuracy_summary, get_daily_picks_accuracy
+            accuracy_summary = get_accuracy_summary(days=30)
+            daily_picks_accuracy = get_daily_picks_accuracy(days=30)
+            
+            # Create columns for accuracy metrics
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Overall Accuracy", f"{accuracy_summary['accuracy']}%")
+                st.caption(f"Last {accuracy_summary['days_analyzed']} days")
+            
+            with col2:
+                st.metric("Total Predictions", accuracy_summary['total_predictions'])
+                st.caption(f"{accuracy_summary['predictions_with_results']} with results")
+            
+            with col3:
+                st.metric("Daily Picks", daily_picks_accuracy['total_picks'])
+                st.caption(f"{daily_picks_accuracy['total_daily_picks_days']} days tracked")
+                
+        except Exception as e:
+            st.info(f"Accuracy tracking unavailable: {e}")
+        
+        st.markdown("---")
+        
+        # Load daily picks data
+        try:
+            from dashboard.components.daily_picks import _load_cache
+            from pathlib import Path
+            data = _load_cache(Path("cache/daily_picks.json"))
+            
+            if data and data.get("picks"):
+                picks = data["picks"]
+                
+                # Display picks section
+                st.subheader("Today's Top Picks")
+                
+                # Show generation time
+                if "generated_at" in data:
+                    st.caption(f"Generated: {data['generated_at']}")
+                
+                # Display each pick with analysis button
+                for i, pick in enumerate(picks[:3]):  # Show top 3 picks
+                    ticker = pick.get("ticker", "")
+                    direction = pick.get("direction", "Unknown")
+                    confidence = pick.get("confidence", 0)
+                    
+                    # Create columns for layout
+                    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+                    
+                    with col1:
+                        st.metric(f"#{i+1} {ticker}", direction)
+                    
+                    with col2:
+                        # Color code the direction
+                        if direction.upper() == "UP":
+                            st.markdown("**UP**")
+                        elif direction.upper() == "DOWN":
+                            st.markdown("**DOWN**")
+                        else:
+                            st.markdown("**NEUTRAL**")
+                    
+                    with col3:
+                        st.metric("Confidence", f"{confidence:.1f}%")
+                    
+                    with col4:
+                        # Create a button for detailed analysis
+                        if st.button(f"Analyze {ticker}", key=f"analyze_{ticker}"):
+                            # Run analysis for this ticker
+                            with st.spinner(f"Analyzing {ticker}..."):
+                                try:
+                                    result = run_prediction(ticker, "1d", low_api_mode=False, fast_ta_mode=False)
+                                    
+                                    # Log the prediction for accuracy tracking
+                                    try:
+                                        from utils.prediction_logger import log_prediction
+                                        prediction_data = result.get("prediction_result", {}).get("prediction", {})
+                                        log_prediction(ticker, prediction_data)
+                                    except Exception as e:
+                                        st.warning(f"Could not log prediction: {e}")
+                                    
+                                    st.session_state["has_prediction_results"] = True
+                                    st.session_state["last_result"] = result
+                                    
+                                    # Display the analysis
+                                    st.markdown("---")
+                                    st.subheader(f"📋 Detailed Analysis for {ticker}")
+                                    display_results(ticker, result)
+                                    
+                                except Exception as e:
+                                    st.error(f"Error analyzing {ticker}: {str(e)}")
+                    
+                    # Add a small gap between picks
+                    st.markdown("---")
+                
+                # Refresh button
+                col1, col2 = st.columns([1, 3])
+                with col1:
+                    if st.button("🔄 Refresh Picks"):
+                        st.info("Daily picks are refreshed automatically via scheduled job. Check back in a few minutes!")
+                with col2:
+                    st.markdown("")
+                    
+            else:
+                st.info("No daily picks available. Click 'Refresh Picks' to generate new recommendations.")
+                
+        except Exception as e:
+            st.error(f"Error loading daily picks: {e}")
 
     with tab3:
         st.header("AI Chatbot Assistant")
@@ -347,50 +649,11 @@ def main() -> None:
 
         if st.button("Get Market Data"):
             try:
-                from dashboard.components.market_data import display_market_data
-
                 display_market_data(market_ticker)
             except Exception as e:
                 st.error(f"Error fetching market data: {str(e)}")
 
-    with tab5:
-        st.header("Monitoring & Alerts")
-        st.markdown("---")
-        from dashboard.components.alerts import display_alerts
-        alerts_file = st.text_input("Alerts file path", value="cache/metrics/alerts.log")
-        max_rows = st.slider("Max rows", min_value=20, max_value=500, value=200, step=10)
-        # Simple alerts view by default for user-friendliness
-        display_alerts(alerts_file, max_rows, simple=True)
 
-        st.markdown("---")
-        st.subheader("Accuracy Baseline")
-        colb1, colb2, colb3 = st.columns([2,1,1])
-        with colb1:
-            baseline_tickers = st.text_input("Tickers (comma)", value="AAPL,MSFT,GOOGL,NVDA,AMZN")
-        with colb2:
-            baseline_period = st.selectbox("Period", ["6mo","1y","2y"], index=1)
-        with colb3:
-            if st.button("Run Baseline"):
-                try:
-                    from utils.baseline import BaselineConfig, run_baseline
-                    cfg = BaselineConfig(
-                        tickers=[t.strip().upper() for t in baseline_tickers.split(",") if t.strip()],
-                        period=baseline_period,
-                        policies=["agent","rule","sma20"],
-                        offline=True,
-                    )
-                    with st.spinner("Running baseline backtests..."):
-                        out = run_baseline(cfg)
-                    st.success(f"Baseline generated: {out['json']}")
-                    try:
-                        import json as _json
-                        with open(out['json'], 'r', encoding='utf-8') as f:
-                            data = _json.load(f)
-                        st.json({k: data[k] for k in ["period","tickers","by_policy"]})
-                    except Exception:
-                        pass
-                except Exception as e:
-                    st.error(f"Baseline failed: {e}")
 
 
 

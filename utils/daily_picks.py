@@ -5,12 +5,13 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable, List, Optional, Tuple
+from typing import Any, List, Optional
 
 from langgraph_flow import run_prediction
 
 
-DEFAULT_TICKERS: List[str] = [
+# Curated list of top stocks for daily picks
+DAILY_PICKS_UNIVERSE: List[str] = [
     "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "AVGO", "BRK-B", "JPM",
     "V", "UNH", "XOM", "HD", "LLY", "MA", "PG", "ORCL", "COST", "KO",
 ]
@@ -44,30 +45,20 @@ def _direction(result: dict) -> Optional[str]:
 
 
 def compute_top_picks(
-    tickers: Iterable[str],
+    tickers: List[str] = None,
     timeframe: str = "1d",
     top_n: int = 3,
-    max_scan: Optional[int] = None,
-    rotate_daily: bool = True,
-    low_api_mode: bool = False,
-    fast_ta_mode: bool = False,
+    low_api_mode: bool = True,  # Default to low API mode for background jobs
+    fast_ta_mode: bool = True,  # Default to fast TA mode for background jobs
 ) -> List[dict]:
-    universe = [str(t).strip().upper() for t in tickers if str(t).strip()]
-    if not universe:
-        universe = list(DEFAULT_TICKERS)
-    # Optional rotation for large lists
-    if max_scan and len(universe) > max_scan:
-        if rotate_daily:
-            key = datetime.utcnow().strftime("%Y%m%d")
-            offset = sum(ord(c) for c in key) % len(universe)
-            universe = universe[offset:] + universe[:offset]
-        universe = universe[:max_scan]
-
-    rows: List[Tuple[str, str, float]] = []
-    for t in universe:
+    """Compute top picks from the universe (optimized for background execution)."""
+    universe = tickers or DAILY_PICKS_UNIVERSE
+    
+    rows: List[tuple[str, str, float]] = []
+    for ticker in universe:
         try:
             result = run_prediction(
-                t,
+                ticker,
                 timeframe,
                 low_api_mode=low_api_mode,
                 fast_ta_mode=fast_ta_mode,
@@ -76,20 +67,22 @@ def compute_top_picks(
             conf = _overall_confidence(result)
             direction = _direction(result) or "Unknown"
             if conf is not None:
-                rows.append((t, direction, float(conf)))
+                rows.append((ticker, direction, float(conf)))
         except Exception:
             # Skip errors to keep batch running
             continue
 
+    # Sort by confidence (highest first) and take top N
     rows.sort(key=lambda r: r[2], reverse=True)
     picks = [
         {"ticker": t, "direction": d, "confidence": c, "timeframe": timeframe}
-        for (t, d, c) in rows[: top_n]
+        for (t, d, c) in rows[:top_n]
     ]
     return picks
 
 
 def _write_payload(path: Path, picks: List[dict]) -> dict:
+    """Write picks to cache file."""
     payload = {"generated_at": _now_iso(), "picks": picks}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -97,37 +90,42 @@ def _write_payload(path: Path, picks: List[dict]) -> dict:
 
 
 def run_daily_picks_job() -> dict:
-    """Run a scheduled job to compute and cache daily top picks.
-
-    Reads configuration from environment variables:
-      - DAILY_PICKS_TICKERS: comma-separated universe (optional)
-      - DAILY_PICKS_TIMEFRAME: default "1d"
-      - DAILY_PICKS_TOP_N: default 3
-      - DAILY_PICKS_MAX_SCAN: default 200
-      - DAILY_PICKS_ROTATE: default 1 (enable rotation)
-      - DAILY_PICKS_LOW_API: default 0
-      - DAILY_PICKS_FAST_TA: default 0
-      - DAILY_PICKS_PATH: default cache/daily_picks.json
+    """Run a scheduled job to compute and cache daily top picks (background optimized).
+    
+    Environment variables:
+    - DAILY_PICKS_TIMEFRAME: default "1d"
+    - DAILY_PICKS_TOP_N: default 3
+    - DAILY_PICKS_LOW_API: default 1 (optimized for background)
+    - DAILY_PICKS_FAST_TA: default 1 (optimized for background)
+    - DAILY_PICKS_PATH: default cache/daily_picks.json
     """
-    tickers_env = os.getenv("DAILY_PICKS_TICKERS", "")
-    tickers = [t.strip().upper() for t in tickers_env.split(",") if t.strip()] if tickers_env else DEFAULT_TICKERS
     timeframe = os.getenv("DAILY_PICKS_TIMEFRAME", "1d")
     top_n = int(os.getenv("DAILY_PICKS_TOP_N", "3"))
-    max_scan = int(os.getenv("DAILY_PICKS_MAX_SCAN", "200"))
-    rotate = os.getenv("DAILY_PICKS_ROTATE", "1") == "1"
-    low_api_mode = os.getenv("DAILY_PICKS_LOW_API", "0") == "1"
-    fast_ta_mode = os.getenv("DAILY_PICKS_FAST_TA", "0") == "1"
+    low_api_mode = os.getenv("DAILY_PICKS_LOW_API", "1") == "1"  # Default to True for background
+    fast_ta_mode = os.getenv("DAILY_PICKS_FAST_TA", "1") == "1"  # Default to True for background
     out_path = Path(os.getenv("DAILY_PICKS_PATH", "cache/daily_picks.json"))
 
+    print(f"🔄 Computing daily picks (top {top_n}) in background...")
     picks = compute_top_picks(
-        tickers=tickers,
         timeframe=timeframe,
         top_n=top_n,
-        max_scan=max_scan,
-        rotate_daily=rotate,
         low_api_mode=low_api_mode,
         fast_ta_mode=fast_ta_mode,
     )
-    return _write_payload(out_path, picks)
+    
+    payload = _write_payload(out_path, picks)
+    print(f"✅ Daily picks written: {out_path}")
+    
+    # Log the daily picks for tracking
+    try:
+        from utils.prediction_logger import log_daily_picks
+        log_daily_picks(picks)
+        print(f"📊 Daily picks logged for accuracy tracking")
+    except Exception as e:
+        print(f"Warning: Could not log daily picks: {e}")
+    
+    return payload
 
 
+if __name__ == "__main__":
+    run_daily_picks_job()
