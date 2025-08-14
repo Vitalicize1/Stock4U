@@ -25,11 +25,24 @@ def display_results(ticker: str, result: dict) -> None:
         # Extract prediction data (flat or nested under "prediction")
         prediction = prediction_result.get("prediction", prediction_result)
 
-        # Confidence: prefer top-level confidence_metrics; else nested; else fallback to model confidence
+        # Confidence: prefer top-level confidence_metrics; else nested
         cm = result.get("confidence_metrics") or prediction_result.get("confidence_metrics") or {}
         overall_conf = cm.get("overall_confidence")
+        # If missing, compute on-the-fly to avoid falling back to raw model confidence
         if overall_conf is None:
-            overall_conf = prediction.get("confidence", 0)
+            try:
+                from agents.tools.prediction_agent_tools import calculate_confidence_metrics_tool
+                conf_res = calculate_confidence_metrics_tool.invoke({
+                    "technical_analysis": technical_source,
+                    "sentiment_integration": sentiment_integration,
+                    "prediction_result": prediction,
+                    "sentiment_analysis": result.get("sentiment_analysis", {})
+                })
+                cm = (conf_res or {}).get("confidence_metrics") or {}
+                overall_conf = cm.get("overall_confidence")
+            except Exception:
+                # Fallback to model confidence only if calculation failed
+                overall_conf = prediction.get("confidence", 0)
 
         model_conf = prediction.get("confidence")
         prediction_summary = {
