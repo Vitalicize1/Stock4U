@@ -3,10 +3,8 @@ streamlit
 yfinance
 pandas
 openai
-# Ensure compatibility with Gemini client
-# google.generativeai is required by llm/gemini_client.py
-google-ai-generativelanguage>=0.6.18
-google-generativeai>=0.6.0
+# Gemini client (google-generativeai pulls the matching generativelanguage)
+google-generativeai==0.8.5
 requests
 python-dotenv
 plotly
