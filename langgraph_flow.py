@@ -90,7 +90,12 @@ from agents.tools.elicitation_tools import (
 )
 
 # Import LLM clients
-from llm.gemini_client import get_gemini_client
+# Gemini client is optional in cloud; fall back gracefully if unavailable
+try:
+    from llm.gemini_client import get_gemini_client  # type: ignore
+    _HAS_GEMINI = True
+except Exception:
+    _HAS_GEMINI = False
 from llm.groq_client import get_groq_client
 from utils.result_cache import get_cached_result, set_cached_result
 from utils.database import initialize_databases

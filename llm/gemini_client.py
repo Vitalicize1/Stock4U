@@ -1,4 +1,11 @@
-import google.generativeai as genai
+# Optional dependency: google-generativeai
+# Guard the import so the module can be imported even if the package is absent
+try:
+    import google.generativeai as genai  # type: ignore
+    _HAS_GENAI = True
+except Exception:  # ImportError or other env-specific issues
+    genai = None  # type: ignore
+    _HAS_GENAI = False
 import os
 from typing import Dict, Any, Tuple
 from utils.errors import ErrorInfo, safe_response
@@ -15,10 +22,17 @@ class GeminiClient:
     """
     
     def __init__(self):
+        # Fail fast but gracefully if the optional dependency is missing
+        if not _HAS_GENAI:
+            raise ValueError(
+                "google-generativeai is not installed. Add 'google-generativeai' to requirements.txt "
+                "or set LOW_API_MODE to avoid LLM usage."
+            )
+
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise ValueError("GOOGLE_API_KEY not found in environment variables")
-        
+
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel('gemini-1.5-flash')
     
@@ -152,7 +166,8 @@ Be conservative in your predictions and always consider market volatility.
             "risk_factors": ["Market volatility and external factors may affect predictions"]
         }
     
-    def _get_default_prediction(self) -> Dict[str, Any]:
+    @staticmethod
+    def _get_default_prediction() -> Dict[str, Any]:
         """Return a default prediction when analysis fails."""
         return {
             "direction": "NEUTRAL",
@@ -192,7 +207,8 @@ def get_gemini_prediction(analysis_summary: str) -> Dict[str, Any]:
         return client.analyze_stock_data(analysis_summary)
     except Exception as e:
         err = ErrorInfo(code="llm_gemini_error", message=str(e), provider="gemini", retryable=True)
-        default_payload = GeminiClient()._get_default_prediction()
+        # Do not instantiate GeminiClient here as it may raise again; use static default
+        default_payload = GeminiClient._get_default_prediction()
         return safe_response(default_payload, err)
 
 def get_gemini_client():
