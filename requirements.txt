@@ -3,9 +3,10 @@ streamlit
 yfinance
 pandas
 openai
-# Ensure compatibility with langchain-google-genai which requires >=0.6.18.
-# We avoid pinning google-generativeai directly to prevent hard conflicts.
+# Ensure compatibility with Gemini client
+# google.generativeai is required by llm/gemini_client.py
 google-ai-generativelanguage>=0.6.18
+google-generativeai>=0.6.0
 requests
 python-dotenv
 plotly
