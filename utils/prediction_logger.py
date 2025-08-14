@@ -8,6 +8,13 @@ from typing import Dict, List, Optional, Any
 
 import pandas as pd
 
+# Import database logger functions for fallback
+try:
+    from utils.database_logger import log_prediction as db_log_prediction, log_daily_picks as db_log_daily_picks, get_accuracy_summary as db_get_accuracy_summary, get_daily_picks_accuracy as db_get_daily_picks_accuracy, export_predictions_to_csv as db_export_predictions_to_csv
+    DB_LOGGER_AVAILABLE = True
+except ImportError:
+    DB_LOGGER_AVAILABLE = False
+
 
 class PredictionLogger:
     """Logger for tracking daily prediction accuracy and performance."""

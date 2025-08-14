@@ -47,7 +47,19 @@ Core entry points:
 - `dashboard.py`: Streamlit UI
 - `agents/`: agent and tool modules
 
-## Setup
+## 🚀 Quick Start
+
+**For the easiest setup experience, see our [Quick Start Guide](docs/QUICK_START.md)!**
+
+### Option 1: One-Click Setup (Recommended)
+- **Windows**: Double-click `scripts\start_stock4u.bat`
+- **Linux/macOS**: Run `./scripts/start_stock4u.sh`
+
+### Option 2: Dashboard Only (Simpler)
+- **Windows**: Double-click `scripts\start_dashboard.bat`  
+- **Linux/macOS**: Run `./scripts/start_dashboard.sh`
+
+### Option 3: Manual Setup
 
 1) Create and activate a virtual environment
 
@@ -142,14 +154,34 @@ pytest -q
 ```
 Stock4U/
 ├── agents/                 # AI agent modules and tools
-├── docs/                   # Documentation
+├── api/                    # FastAPI backend
+├── backtesting/            # Backtesting framework
+├── cache/                  # Cache storage
+├── dashboard/              # Dashboard components
+├── deployment/             # Streamlit Cloud deployment files
+├── docs/                   # Documentation and user guides
+├── examples/               # Example usage
 ├── llm/                    # LLM client wrappers
+├── ml/                     # Machine learning models
+├── models/                 # Database models
+├── ops/                    # Operations and monitoring
+├── portfolio/              # Portfolio management
+├── scripts/                # User-friendly setup scripts
+├── tests/                  # Test suite
 ├── utils/                  # Helpers (logging, caching, fetchers)
-├── dashboard.py            # Streamlit UI
+├── dashboard.py            # Streamlit UI (local)
 ├── langgraph_flow.py       # Main LangGraph workflow
 ├── main.py                 # CLI entry
-└── tests/                  # Test suite
+└── requirements.txt        # Dependencies
 ```
+
+## 📁 Key Directories
+
+- **`scripts/`** - One-click setup scripts for easy installation
+- **`deployment/`** - Files for Streamlit Cloud deployment
+- **`docs/`** - User guides and documentation
+- **`agents/`** - AI agents and workflow components
+- **`dashboard/`** - Dashboard UI components
 
 ## Notes
 

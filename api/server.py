@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field, validator
 from langgraph_flow import run_prediction
 from backtesting import run as bt
 from utils.baseline import BaselineConfig, run_baseline
+from utils.validation import InputValidator, ValidationResult
+from utils.validation_middleware import create_validation_middleware
 """Paper trading endpoints removed per UI simplification."""
 
 
@@ -31,6 +33,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add validation middleware
+enable_validation = _os.getenv("ENABLE_VALIDATION_MIDDLEWARE", "true").lower() == "true"
+if enable_validation:
+    create_validation_middleware(app, enable_validation=True)
 
 
 # Request size limit middleware (simple Content-Length guard)
@@ -119,8 +126,18 @@ class PredictRequest(BaseModel):
     use_ml_model: bool = False
 
     @validator("ticker")
-    def _upper(cls, v: str) -> str:
-        return (v or "").upper().strip()
+    def _validate_ticker(cls, v: str) -> str:
+        result = InputValidator.validate_ticker_symbol(v)
+        if not result.is_valid:
+            raise ValueError(result.error_message)
+        return result.sanitized_value
+
+    @validator("timeframe")
+    def _validate_timeframe(cls, v: str) -> str:
+        result = InputValidator.validate_timeframe(v)
+        if not result.is_valid:
+            raise ValueError(result.error_message)
+        return result.sanitized_value
 
 
 class BacktestRequest(BaseModel):
@@ -133,11 +150,53 @@ class BacktestRequest(BaseModel):
     fee_bps: float = 5.0
     slip_bps: float = 5.0
 
+    @validator("ticker")
+    def _validate_ticker(cls, v):
+        if v is None:
+            return v
+        result = InputValidator.validate_ticker_symbol(v)
+        if not result.is_valid:
+            raise ValueError(result.error_message)
+        return result.sanitized_value
+
     @validator("tickers", pre=True)
-    def _split(cls, v):
+    def _validate_tickers(cls, v):
+        if v is None:
+            return v
         if isinstance(v, str):
-            return [t.strip().upper() for t in v.split(",") if t.strip()]
-        return v
+            v = [t.strip() for t in v.split(",") if t.strip()]
+        result = InputValidator.validate_ticker_list(v)
+        if not result.is_valid:
+            raise ValueError(result.error_message)
+        return result.sanitized_value
+
+    @validator("period")
+    def _validate_period(cls, v: str) -> str:
+        result = InputValidator.validate_period(v)
+        if not result.is_valid:
+            raise ValueError(result.error_message)
+        return result.sanitized_value
+
+    @validator("cash")
+    def _validate_cash(cls, v: float) -> float:
+        result = InputValidator.validate_numeric_range(v, 0, InputValidator.MAX_VALUES["max_cash_amount"], "cash")
+        if not result.is_valid:
+            raise ValueError(result.error_message)
+        return result.sanitized_value
+
+    @validator("fee_bps")
+    def _validate_fee_bps(cls, v: float) -> float:
+        result = InputValidator.validate_numeric_range(v, 0, InputValidator.MAX_VALUES["max_fee_bps"], "fee_bps")
+        if not result.is_valid:
+            raise ValueError(result.error_message)
+        return result.sanitized_value
+
+    @validator("slip_bps")
+    def _validate_slip_bps(cls, v: float) -> float:
+        result = InputValidator.validate_numeric_range(v, 0, InputValidator.MAX_VALUES["max_slip_bps"], "slip_bps")
+        if not result.is_valid:
+            raise ValueError(result.error_message)
+        return result.sanitized_value
 class BaselineRequest(BaseModel):
     tickers: list[str] = Field(default_factory=lambda: ["AAPL","MSFT","GOOGL","NVDA","AMZN"])
     period: str = "1y"
@@ -148,6 +207,41 @@ class BaselineRequest(BaseModel):
     walk_forward: bool = False
     wf_splits: int = 3
     tune_thresholds: bool = False
+
+    @validator("tickers")
+    def _validate_tickers(cls, v: list[str]) -> list[str]:
+        result = InputValidator.validate_ticker_list(v)
+        if not result.is_valid:
+            raise ValueError(result.error_message)
+        return result.sanitized_value
+
+    @validator("period")
+    def _validate_period(cls, v: str) -> str:
+        result = InputValidator.validate_period(v)
+        if not result.is_valid:
+            raise ValueError(result.error_message)
+        return result.sanitized_value
+
+    @validator("fee_bps")
+    def _validate_fee_bps(cls, v: float) -> float:
+        result = InputValidator.validate_numeric_range(v, 0, InputValidator.MAX_VALUES["max_fee_bps"], "fee_bps")
+        if not result.is_valid:
+            raise ValueError(result.error_message)
+        return result.sanitized_value
+
+    @validator("slip_bps")
+    def _validate_slip_bps(cls, v: float) -> float:
+        result = InputValidator.validate_numeric_range(v, 0, InputValidator.MAX_VALUES["max_slip_bps"], "slip_bps")
+        if not result.is_valid:
+            raise ValueError(result.error_message)
+        return result.sanitized_value
+
+    @validator("wf_splits")
+    def _validate_wf_splits(cls, v: int) -> int:
+        result = InputValidator.validate_numeric_range(v, 1, 10, "wf_splits")
+        if not result.is_valid:
+            raise ValueError(result.error_message)
+        return int(result.sanitized_value)
 
 
 class PaperTradeRequest(BaseModel):
@@ -416,23 +510,52 @@ def auth_verify(authorization: str | None = Header(None), _: None = Depends(auth
 
 @app.get("/metrics")
 def metrics(_: None = Depends(auth_guard)) -> Response:
-    """Basic Prometheus-style metrics from metrics.jsonl (approx).
-
-    For a lightweight export, we expose just request totals by endpoint and a
-    simple last-run learning timestamp if available.
-    """
+    """Enhanced Prometheus-style metrics for Stock4U monitoring."""
     from pathlib import Path
     import json as _json
+    import psutil
+    import time
     lines = []
+    
     try:
-        # request totals are tracked via logs; here we just signal endpoint exists
+        # Basic health check
         lines.append("stock4u_up 1")
-        # last learning status timestamp
+        
+        # System metrics
+        process = psutil.Process()
+        memory_info = process.memory_info()
+        lines.append(f"stock4u_process_memory_bytes {memory_info.rss}")
+        lines.append(f"stock4u_process_cpu_percent {process.cpu_percent()}")
+        lines.append(f"stock4u_process_threads {process.num_threads()}")
+        
+        # Learning job metrics
         lp = Path("cache") / "metrics" / "agent_learning" / "last_status.json"
         if lp.exists():
             data = _json.loads(lp.read_text())
             lines.append(f"stock4u_learning_last_elapsed_seconds {float(data.get('elapsed_s', 0.0))}")
-    except Exception:
+            lines.append(f"stock4u_learning_last_timestamp {int(time.time())}")
+        
+        # Cache metrics
+        cache_dir = Path("cache")
+        if cache_dir.exists():
+            cache_size = sum(f.stat().st_size for f in cache_dir.rglob('*') if f.is_file())
+            lines.append(f"stock4u_cache_size_bytes {cache_size}")
+        
+        # Database connection metrics (if available)
+        try:
+            from utils.database import get_db_connection
+            conn = get_db_connection()
+            if conn:
+                lines.append("stock4u_database_connected 1")
+                conn.close()
+            else:
+                lines.append("stock4u_database_connected 0")
+        except:
+            lines.append("stock4u_database_connected 0")
+            
+    except Exception as e:
         lines.append("stock4u_up 0")
+        lines.append(f"stock4u_error_info {str(e)}")
+    
     return Response("\n".join(lines) + "\n", media_type="text/plain")
 

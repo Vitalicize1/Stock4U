@@ -1,0 +1,29 @@
+groups:
+  - name: stock4u_alerts
+    rules:
+      - alert: Stock4UAPIDown
+        expr: stock4u_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Stock4U API is down"
+          description: "The Stock4U API has been down for more than 1 minute"
+
+      - alert: LearningJobFailed
+        expr: stock4u_learning_last_elapsed_seconds > 3600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Learning job taking too long"
+          description: "The learning job has been running for more than 1 hour"
+
+      - alert: HighAPIResponseTime
+        expr: rate(api_request_ms_sum[5m]) / rate(api_request_ms_count[5m]) > 5000
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API response time"
+          description: "API response time is above 5 seconds"

@@ -1,7 +1,0 @@
-timestamp,ticker,predicted_direction,predicted_confidence,timeframe,predicted_price,current_price,actual_direction,actual_price,correct
-2025-08-14T07:34:03.383907Z,AAPL,UP,75.5,1d,150.25,148.5,,,
-2025-08-14T07:34:03.383907Z,MSFT,DOWN,62.3,1d,320.0,325.75,,,
-2025-08-14T07:34:03.398742Z,GOOGL,UP,81.2,1d,2800.0,2750.0,,,
-2025-08-14T07:34:17.882235Z,AAPL,UP,75.5,1d,150.25,148.5,,,
-2025-08-14T07:34:17.883265Z,MSFT,DOWN,62.3,1d,320.0,325.75,,,
-2025-08-14T07:34:17.891822Z,GOOGL,UP,81.2,1d,2800.0,2750.0,,,

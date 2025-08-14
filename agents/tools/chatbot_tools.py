@@ -32,8 +32,12 @@ def parse_user_intent(user_input: str) -> Dict[str, Any]:
     for word in text.split():
         clean = re.sub(r"[^A-Z]", "", word)
         if 1 <= len(clean) <= 5 and clean.isupper():
-            ticker = clean
-            break
+            # Validate the extracted ticker
+            from utils.validation import InputValidator
+            validation_result = InputValidator.validate_ticker_symbol(clean)
+            if validation_result.is_valid:
+                ticker = validation_result.sanitized_value
+                break
 
     intent = "greeting"
     if _is_stock():

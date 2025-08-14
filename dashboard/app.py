@@ -10,6 +10,7 @@ import streamlit as st
 import yfinance as yf
 
 from langgraph_flow import run_prediction, run_chatbot_workflow
+from utils.validation import InputValidator, ValidationResult
 
 from dashboard.views.results import display_results
 from dashboard.auth import show_login_page, show_logout_button, show_user_info, init_auth
@@ -45,6 +46,11 @@ def main() -> None:
         }
         [data-testid="stMetricValue"], [data-testid="stMetricDelta"] {
           font-variant-numeric: tabular-nums;
+        }
+        /* Make placeholder text smaller in Jira section */
+        .stTextInput input::placeholder, .stTextArea textarea::placeholder {
+          font-size: 0.75rem !important;
+          opacity: 0.6 !important;
         }
         </style>
         """,
@@ -128,6 +134,29 @@ def main() -> None:
                     "Run Prediction",
                     help="Start the AI analysis process"
                 )
+                
+                # Validate inputs before processing
+                if submitted:
+                    # Validate ticker
+                    ticker_validation = InputValidator.validate_ticker_symbol(ticker_input)
+                    if not ticker_validation.is_valid:
+                        st.error(f"❌ Invalid ticker: {ticker_validation.error_message}")
+                        submitted = False
+                    
+                    # Validate timeframe
+                    timeframe_validation = InputValidator.validate_timeframe(timeframe)
+                    if not timeframe_validation.is_valid:
+                        st.error(f"❌ Invalid timeframe: {timeframe_validation.error_message}")
+                        submitted = False
+                    
+                    # Show warnings if any
+                    if ticker_validation.warnings:
+                        for warning in ticker_validation.warnings:
+                            st.warning(f"⚠️ {warning}")
+                    
+                    if timeframe_validation.warnings:
+                        for warning in timeframe_validation.warnings:
+                            st.warning(f"⚠️ {warning}")
         
         with col2:
             # Quick analysis section
@@ -144,41 +173,53 @@ def main() -> None:
                         ticker = popular_tickers[i + j]
                         with cols[j]:
                             if st.button(f"{ticker}", key=f"quick_{ticker}"):
-                                with st.spinner(f"Quick analysis of {ticker}..."):
-                                    try:
-                                        result = run_prediction(ticker, "1d", low_api_mode=False, fast_ta_mode=False, use_ml_model=False)
-                                        
-                                        # Log the prediction
+                                # Validate ticker before processing
+                                ticker_validation = InputValidator.validate_ticker_symbol(ticker)
+                                if not ticker_validation.is_valid:
+                                    st.error(f"❌ Invalid ticker {ticker}: {ticker_validation.error_message}")
+                                else:
+                                    with st.spinner(f"Quick analysis of {ticker}..."):
                                         try:
-                                            from utils.prediction_logger import log_prediction
-                                            prediction_data = result.get("prediction_result", {}).get("prediction", {})
-                                            log_prediction(ticker, prediction_data)
+                                            result = run_prediction(ticker, "1d", low_api_mode=False, fast_ta_mode=False, use_ml_model=False)
+                                            
+                                            # Log the prediction
+                                            try:
+                                                from utils.prediction_logger import log_prediction
+                                                prediction_result = result.get("prediction_result", {})
+                                                prediction_data = {
+                                                    "direction": prediction_result.get("direction"),
+                                                    "confidence": prediction_result.get("confidence"),
+                                                    "timeframe": "1d",
+                                                    "predicted_price": prediction_result.get("price_target"),
+                                                    "current_price": result.get("data", {}).get("market_data", {}).get("current_price")
+                                                }
+                                                log_prediction(ticker, prediction_data)
+                                            except Exception as e:
+                                                print(f"Warning: Could not log prediction: {e}")
+                                            
+                                            # Store results
+                                            st.session_state["has_prediction_results"] = True
+                                            st.session_state["last_result"] = result
+                                            
+                                            # Build summary
+                                            pr = result.get("prediction_result", {})
+                                            prediction = pr.get("prediction", pr)
+                                            cm = result.get("confidence_metrics") or pr.get("confidence_metrics") or {}
+                                            overall_conf = cm.get("overall_confidence")
+                                            if overall_conf is None:
+                                                overall_conf = prediction.get("confidence")
+                                            
+                                            st.session_state["last_run_summary"] = {
+                                                "ticker": ticker,
+                                                "timeframe": "1d",
+                                                "direction": prediction.get("direction"),
+                                                "confidence": overall_conf,
+                                            }
+                                            
+                                            st.rerun()
+                                            
                                         except Exception as e:
-                                            print(f"Warning: Could not log prediction: {e}")
-                                        
-                                        # Store results
-                                        st.session_state["has_prediction_results"] = True
-                                        st.session_state["last_result"] = result
-                                        
-                                        # Build summary
-                                        pr = result.get("prediction_result", {})
-                                        prediction = pr.get("prediction", pr)
-                                        cm = result.get("confidence_metrics") or pr.get("confidence_metrics") or {}
-                                        overall_conf = cm.get("overall_confidence")
-                                        if overall_conf is None:
-                                            overall_conf = prediction.get("confidence")
-                                        
-                                        st.session_state["last_run_summary"] = {
-                                            "ticker": ticker,
-                                            "timeframe": "1d",
-                                            "direction": prediction.get("direction"),
-                                            "confidence": overall_conf,
-                                        }
-                                        
-                                        st.rerun()
-                                        
-                                    except Exception as e:
-                                        st.error(f"Error analyzing {ticker}: {str(e)}")
+                                            st.error(f"Error analyzing {ticker}: {str(e)}")
         
         # Handle form submission
         if submitted:
@@ -191,7 +232,14 @@ def main() -> None:
                         # Log the prediction for accuracy tracking
                         try:
                             from utils.prediction_logger import log_prediction
-                            prediction_data = result.get("prediction_result", {}).get("prediction", {})
+                            prediction_result = result.get("prediction_result", {})
+                            prediction_data = {
+                                "direction": prediction_result.get("direction"),
+                                "confidence": prediction_result.get("confidence"),
+                                "timeframe": timeframe,
+                                "predicted_price": prediction_result.get("price_target"),
+                                "current_price": result.get("data", {}).get("market_data", {}).get("current_price")
+                            }
                             log_prediction(ticker, prediction_data)
                         except Exception as e:
                             print(f"Warning: Could not log prediction: {e}")
@@ -309,10 +357,10 @@ def main() -> None:
             
             # Labels dropdown with predefined options
             label_options = {
-                "Bug": ["bug", "ui", "backend", "data", "performance", "security"],
-                "Feature Request": ["enhancement", "ui", "backend", "data", "analytics", "export"],
-                "Question": ["question", "help", "documentation", "tutorial", "setup"],
-                "Task": ["task", "documentation", "testing", "refactor", "maintenance"]
+                "Bug": ["Bug", "UI", "Backend", "Data", "Performance", "Security"],
+                "Feature Request": ["Enhancement", "UI", "Backend", "Data", "Analytics", "Export"],
+                "Question": ["Question", "Help", "Documentation", "Tutorial", "Setup"],
+                "Task": ["Task", "Documentation", "Testing", "Refactor", "Maintenance"]
             }
             
             # Get available labels for the selected issue type
@@ -325,7 +373,7 @@ def main() -> None:
             selected_labels = st.multiselect(
                 "Labels",
                 options=available_labels,
-                default=["bug"] if issue_type == "Bug" else ["enhancement"] if issue_type == "Feature Request" else ["question"] if issue_type == "Question" else ["task"],
+                default=[],
                 help="Select relevant labels to categorize your issue"
             )
             
@@ -438,10 +486,7 @@ def main() -> None:
             st.info("Last run — " + " | ".join(msg_parts))
             display_results(tkr, st.session_state.get("last_result"))
         else:
-            st.subheader("Predictions")
-            st.write(
-                "Use the form in the sidebar to run a prediction. Choose a ticker and timeframe, then click Run Prediction."
-            )
+            pass
 
     with tab2:
         st.header("Daily Picks & Analysis")
@@ -502,9 +547,23 @@ def main() -> None:
                         st.metric(f"#{i+1} {ticker}", direction)
                     
                     with col2:
-                        # Color code the direction
+                        # Color code the direction with confidence bar for UP
                         if direction.upper() == "UP":
-                            st.markdown("**UP**")
+                            # Create a confidence bar that scales with confidence level
+                            confidence_width = min(confidence, 100)  # Cap at 100%
+                            green_intensity = int(255 * (confidence / 100))  # Scale green intensity
+                            bar_color = f"rgb(0, {green_intensity}, 0)"
+                            
+                            # Display UP with confidence bar
+                            st.markdown(f"""
+                            <div style="display: flex; flex-direction: column; align-items: center;">
+                                <div style="font-weight: bold; margin-bottom: 5px;">UP</div>
+                                <div style="width: 100%; height: 8px; background-color: #f0f0f0; border-radius: 4px; overflow: hidden;">
+                                    <div style="width: {confidence_width}%; height: 100%; background-color: {bar_color}; transition: width 0.3s ease;"></div>
+                                </div>
+                                <div style="font-size: 0.8em; color: #666; margin-top: 2px;">{confidence:.1f}% confidence</div>
+                            </div>
+                            """, unsafe_allow_html=True)
                         elif direction.upper() == "DOWN":
                             st.markdown("**DOWN**")
                         else:
@@ -524,7 +583,14 @@ def main() -> None:
                                     # Log the prediction for accuracy tracking
                                     try:
                                         from utils.prediction_logger import log_prediction
-                                        prediction_data = result.get("prediction_result", {}).get("prediction", {})
+                                        prediction_result = result.get("prediction_result", {})
+                                        prediction_data = {
+                                            "direction": prediction_result.get("direction"),
+                                            "confidence": prediction_result.get("confidence"),
+                                            "timeframe": "1d",
+                                            "predicted_price": prediction_result.get("price_target"),
+                                            "current_price": result.get("data", {}).get("market_data", {}).get("current_price")
+                                        }
                                         log_prediction(ticker, prediction_data)
                                     except Exception as e:
                                         st.warning(f"Could not log prediction: {e}")

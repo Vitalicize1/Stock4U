@@ -59,19 +59,20 @@ def validate_ticker_symbol(ticker: str) -> Dict[str, Any]:
         Dictionary with validation results and ticker info
     """
     try:
-        # Clean and standardize ticker
-        ticker = ticker.upper().strip()
+        # Use the centralized validation system
+        from utils.validation import InputValidator
         
-        # Basic validation
-        if not ticker or len(ticker) > 10:
+        validation_result = InputValidator.validate_ticker_symbol(ticker)
+        
+        if not validation_result.is_valid:
             return {
                 "valid": False,
-                "error": "Invalid ticker format",
+                "error": validation_result.error_message,
                 "ticker": ticker
             }
         
-        # Try to get ticker info from yfinance
-        ticker_obj = yf.Ticker(ticker)
+        # If validation passed, get additional info from yfinance
+        ticker_obj = yf.Ticker(validation_result.sanitized_value)
         info = ticker_obj.info
         
         # Check if ticker exists
@@ -79,12 +80,12 @@ def validate_ticker_symbol(ticker: str) -> Dict[str, Any]:
             return {
                 "valid": False,
                 "error": "Ticker not found or invalid",
-                "ticker": ticker
+                "ticker": validation_result.sanitized_value
             }
         
         return {
             "valid": True,
-            "ticker": ticker,
+            "ticker": validation_result.sanitized_value,
             "company_name": info.get('longName', 'Unknown'),
             "sector": info.get('sector', 'Unknown'),
             "industry": info.get('industry', 'Unknown'),

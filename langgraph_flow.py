@@ -93,6 +93,9 @@ from agents.tools.elicitation_tools import (
 from llm.gemini_client import get_gemini_client
 from llm.groq_client import get_groq_client
 from utils.result_cache import get_cached_result, set_cached_result
+from utils.database import initialize_databases
+from utils.database_cache import initialize_cache
+from utils.database_logger import initialize_database_logger
 from functools import lru_cache
 import time
 from utils.logger import get_logger
@@ -1212,6 +1215,17 @@ def run_prediction(ticker: str, timeframe: str = "1d", *args, **kwargs):
     - Positional args: (ticker, timeframe, [low_api_mode], [fast_ta_mode])
     - Keyword args: low_api_mode: bool, fast_ta_mode: bool
     """
+    # Initialize database systems
+    try:
+        db_status = initialize_databases()
+        cache_status = initialize_cache()
+        logger_status = initialize_database_logger()
+        print(f"📊 Database Status: {db_status}")
+        print(f"💾 Cache Status: {cache_status}")
+        print(f"📝 Logger Status: {logger_status}")
+    except Exception as e:
+        print(f"⚠️ Database initialization warning: {e}")
+    
     # Extract flags from args/kwargs with safe defaults
     low_api_mode = bool(kwargs.get("low_api_mode", False))
     fast_ta_mode = bool(kwargs.get("fast_ta_mode", False))

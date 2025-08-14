@@ -20,3 +20,19 @@ fastapi
 uvicorn[standard]
 optuna
 APScheduler
+
+# Database dependencies
+psycopg2-binary>=2.9.0
+redis>=4.5.0
+sqlalchemy>=2.0.0
+alembic>=1.12.0
+peewee>=3.16.0
+
+# Monitoring dependencies
+psutil>=5.9.0
+
+# Security dependencies
+PyJWT[crypto]>=2.8.0
+bcrypt>=4.0.0
+cryptography>=41.0.0
+email-validator>=2.0.0
