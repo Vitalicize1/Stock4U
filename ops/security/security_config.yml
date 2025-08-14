@@ -1,0 +1,102 @@
+# Stock4U Security Configuration
+# This file contains security settings for production deployment
+
+security:
+  # Authentication & Authorization
+  auth:
+    # JWT Configuration
+    jwt:
+      secret_key: "${JWT_SECRET_KEY}"  # Set via environment variable
+      algorithm: "HS256"
+      access_token_expire_minutes: 30
+      refresh_token_expire_days: 7
+    
+    # API Token Configuration
+    api_token:
+      min_length: 32
+      require_special_chars: true
+      rotation_days: 90
+    
+    # Rate Limiting
+    rate_limiting:
+      requests_per_minute: 60
+      burst_limit: 10
+      window_size_seconds: 60
+  
+  # Network Security
+  network:
+    # CORS Configuration
+    cors:
+      allowed_origins: ["${ALLOWED_ORIGINS}"]
+      allowed_methods: ["GET", "POST", "PUT", "DELETE"]
+      allowed_headers: ["Authorization", "Content-Type"]
+      allow_credentials: true
+      max_age: 3600
+    
+    # IP Whitelisting (optional)
+    ip_whitelist:
+      enabled: false
+      allowed_ips: []
+    
+    # SSL/TLS Configuration
+    ssl:
+      enabled: true
+      cert_file: "${SSL_CERT_FILE}"
+      key_file: "${SSL_KEY_FILE}"
+      min_version: "TLSv1.2"
+  
+  # Data Protection
+  data_protection:
+    # Encryption
+    encryption:
+      algorithm: "AES-256-GCM"
+      key_rotation_days: 30
+    
+    # Data Retention
+    retention:
+      logs_days: 90
+      metrics_days: 365
+      alerts_days: 180
+    
+    # PII Protection
+    pii:
+      mask_emails: true
+      mask_ips: true
+      anonymize_user_data: true
+  
+  # Monitoring Security
+  monitoring:
+    # Prometheus Security
+    prometheus:
+      require_auth: true
+      scrape_interval: 15
+      timeout: 10
+    
+    # Grafana Security
+    grafana:
+      admin_password_min_length: 12
+      session_timeout_hours: 8
+      disable_signup: true
+      require_email_verification: true
+    
+    # AlertManager Security
+    alertmanager:
+      require_auth: true
+      webhook_timeout: 10
+  
+  # Audit & Logging
+  audit:
+    # Audit Logging
+    logging:
+      enabled: true
+      level: "INFO"
+      format: "json"
+      destination: "file"
+      file_path: "/var/log/stock4u/audit.log"
+    
+    # Security Events
+    events:
+      failed_login: true
+      api_access: true
+      config_changes: true
+      data_access: true

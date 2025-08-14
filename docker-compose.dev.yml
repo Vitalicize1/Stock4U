@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # Development overrides
+  stock4u-api:
+    profiles:
+      - dev
+    volumes:
+      - .:/app
+      - /app/venv  # Exclude virtual environment
+      - /app/__pycache__  # Exclude Python cache
+      - /app/.git  # Exclude git directory
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+    read_only: false  # Allow file changes in development
+
+  # Development tools
+  pgadmin:
+    profiles:
+      - dev
+    ports:
+      - "8080:80"  # Expose for development
+
+  redis-commander:
+    profiles:
+      - dev
+    ports:
+      - "8081:8081"  # Expose for development
+
+  # Development monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: stock4u-prometheus-dev
+    profiles:
+      - dev
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_dev_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=24h'
+      - '--web.enable-lifecycle'
+    networks:
+      - stock4u-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: stock4u-grafana-dev
+    profiles:
+      - dev
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin123}
+      GF_USERS_ALLOW_SIGN_UP: false
+      GF_SECURITY_DISABLE_GRAVATAR: true
+      GF_SECURITY_COOKIE_SECURE: false  # Set to true in production
+    volumes:
+      - grafana_dev_data:/var/lib/grafana
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - stock4u-network
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  prometheus_dev_data:
+    driver: local
+  grafana_dev_data:
+    driver: local
