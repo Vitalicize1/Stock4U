@@ -264,7 +264,7 @@ class DashboardAuth:
 
 def show_login_page() -> bool:
     """Display the login page with registration and forgot password options."""
-    st.title("Stock4U Authentication")
+    st.title("Stock4U")
     
     # Initialize auth
     auth = DashboardAuth()
