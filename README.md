@@ -1,195 +1,228 @@
-﻿# Stock4U
+﻿# Stock4U - AI-Powered Stock Analysis Platform
 
-A multi-agent stock analysis system built with LangGraph, Streamlit, and yfinance. It performs technical analysis, integrates sentiment when available, and produces a clear prediction with risk assessment. See detailed docs in `docs/README.md`.
+**Get AI-powered stock predictions, technical analysis, and market insights in minutes!**
 
-## Features
+Stock4U is a comprehensive multi-agent stock analysis system that combines technical analysis, sentiment analysis, and AI predictions to help you make informed investment decisions.
 
-- Multi-agent LangGraph workflow (orchestrator, data collection, technical analysis, prediction, evaluation, elicitation)
-- Streamlit dashboard with predictions, chatbot assistant, and market data
-- **MCP (Model Context Protocol) server** for AI integration and external tool access
-## Production notes (auth, learning, monitoring)
+## Key Features
 
-- API auth: set `API_TOKEN` (any strong token) and call endpoints with header `Authorization: Bearer <token>`.
-- Rate limiting: `RATE_LIMIT_PER_MIN` (default 60).
-- Autonomous learning: enable with `LEARNING_SCHED_ENABLED=1` and configure `LEARNING_TICKERS`, `LEARNING_TIMEFRAMES`, `LEARNING_PERIOD`, `LEARNING_ITERATIONS`, `LEARNING_LR`, `LEARNING_CRON`.
-- Key endpoints:
-  - `POST /predict`, `POST /baseline`, `GET /baseline/latest`
-  - `POST /agent/learn`, `GET /agent/learn/status`, `GET /agent/learn/last`
-  - `GET /validation/run` (schema/range checks)
-  - `GET /health/errors`, `GET /metrics`, `GET /auth/verify`
+- **AI-Powered Predictions** - Multi-agent LangGraph workflow for accurate stock forecasts
+- **Technical Analysis** - Charts, indicators, support/resistance levels, and trading signals
+- **Real-time Market Data** - Live stock prices, volume, and key metrics
+- **Risk Assessment** - Visual breakdown of potential risks and rewards
+- **AI Chatbot** - Ask questions about stocks and markets in natural language
+- **Beautiful Dashboard** - Modern Streamlit interface with interactive charts
+- **Secure & Reliable** - Production-ready with authentication and monitoring
 
-### Nightly QA (optional)
+## Quick Start (Choose Your Setup)
 
-- Run locally:
-```
-python -m utils.nightly_qa
-```
-- Windows Task Scheduler helper script: `ops/nightly_qa.ps1`:
-```
-powershell -ExecutionPolicy Bypass -File ops/nightly_qa.ps1 -ApiUrl http://localhost:8000 -Token YOUR_TOKEN
-```
+### Option 1: One-Click Full Setup (Recommended)
+**Everything you need in one click!**
 
-### Prometheus monitoring (optional)
+**Windows Users:**
+1. Download and extract the Stock4U folder
+2. Double-click `scripts\start_stock4u.bat`
+3. Wait 5-10 minutes for setup (first time only)
+4. Your browser opens automatically to the dashboard
 
-- Config at `ops/prometheus/prometheus.yml` (uses Bearer token from `token.txt`).
-- See `ops/prometheus/README.md` for Docker/native instructions.
-
-- Technical indicators, trend analysis, support/resistance, trading signals
-- Risk assessment with visual breakdown
-- Optional LLM integrations (OpenAI/Google) with quota awareness
-
-## Architecture (High Level)
-
-Orchestrator → Data Collector → Technical Analyzer → Sentiment Analyzer → Sentiment Integrator → Prediction Agent → Evaluator Optimizer → Elicitation
-
-Core entry points:
-- `langgraph_flow.py`: runs the end-to-end workflow
-- `dashboard.py`: Streamlit UI
-- `agents/`: agent and tool modules
-
-## 🚀 Quick Start
-
-**For the easiest setup experience, see our [Quick Start Guide](docs/QUICK_START.md)!**
-
-### Option 1: One-Click Setup (Recommended)
-- **Windows**: Double-click `scripts\start_stock4u.bat`
-- **Linux/macOS**: Run `./scripts/start_stock4u.sh`
+**Linux/macOS Users:**
+1. Download and extract the Stock4U folder
+2. Open terminal in the Stock4U directory
+3. Run: `./scripts/start_stock4u.sh`
+4. Your browser opens automatically to the dashboard
 
 ### Option 2: Dashboard Only (Simpler)
-- **Windows**: Double-click `scripts\start_dashboard.bat`  
-- **Linux/macOS**: Run `./scripts/start_dashboard.sh`
+**Just the interface - no database setup needed**
 
-### Option 3: Manual Setup
+**Windows Users:**
+1. Download and extract the Stock4U folder
+2. Double-click `scripts\start_dashboard.bat`
+3. Wait for Python setup to complete
+4. Dashboard opens in your browser
 
-1) Create and activate a virtual environment
+**Linux/macOS Users:**
+1. Download and extract the Stock4U folder
+2. Open terminal in the Stock4U directory
+3. Run: `./scripts/start_dashboard.sh`
+4. Dashboard opens in your browser
+
+## What You Get
+
+### Full Setup Includes:
+- **Main Dashboard** (http://localhost:8501) - Your main interface
+- **API Backend** (http://localhost:8000) - Powering all features
+- **Database** - Secure data storage
+- **Cache System** - Fast performance
+- **Admin Tools** - Database and cache management
+
+### Dashboard Only Includes:
+- **Streamlit Dashboard** (http://localhost:8501) - Core interface
+- **Local Storage** - No database required
+
+## Your First Stock Analysis
+
+1. **Open the Dashboard** - Your browser should open automatically
+2. **Enter a Stock Symbol** - Try popular ones like AAPL, MSFT, GOOGL, TSLA
+3. **Select Timeframe** - Choose from 1d, 5d, 1mo, 3mo, 1y
+4. **Click "Run Prediction"** - Get AI-powered analysis in seconds!
+
+## API Keys (Optional)
+
+Stock4U works great out of the box with our development API keys! For enhanced features, you can add your own:
 
 ```bash
-python -m venv venv
-# Windows (PowerShell)
-venv\Scripts\Activate.ps1
-# macOS/Linux
-source venv/bin/activate
+# Create a .env file in the Stock4U folder with:
+OPENAI_API_KEY=your_openai_key_here
+GOOGLE_API_KEY=your_google_key_here  
+TAVILY_API_KEY=your_tavily_key_here
 ```
 
-If PowerShell blocks scripts, run once (as current user):
+**Enhanced features with API keys:**
+- Advanced AI chatbot responses
+- News sentiment analysis
+- Custom prediction models
+- Learning system improvements
 
-```powershell
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-```
+## System Requirements
 
-2) Install dependencies
+### For Full Setup:
+- **Windows 10/11** or **macOS 10.15+** or **Linux (Ubuntu 18.04+)**
+- **Docker Desktop** - [Download here](https://www.docker.com/products/docker-desktop/)
+- **8GB RAM** (recommended)
+- **2GB free disk space**
 
+### For Dashboard Only:
+- **Python 3.8+** - [Download here](https://www.python.org/downloads/)
+- **4GB RAM** (recommended)
+- **1GB free disk space**
+
+## What You Can Do
+
+### Stock Analysis
+- **Predictions**: AI-powered price forecasts with confidence levels
+- **Technical Charts**: Candlestick charts with indicators
+- **Support/Resistance**: Key price levels and trends
+- **Risk Assessment**: Visual breakdown of potential outcomes
+
+### AI Features
+- **Chatbot**: Ask questions about stocks, markets, or analysis
+- **Natural Language**: "What's the outlook for Apple stock?"
+- **Sentiment Analysis**: News sentiment integration (with API key)
+- **Learning System**: Autonomous model improvement
+
+### Market Data
+- **Real-time Prices**: Live stock data and metrics
+- **Volume Analysis**: Trading volume and patterns
+- **Market Snapshot**: Quick overview of any stock
+- **Historical Data**: Price history and performance
+
+## Stopping Stock4U
+
+### Full Setup:
 ```bash
-pip install -r requirements.txt
+docker-compose down
 ```
 
-3) (Optional) Configure API keys in a `.env` file
+### Dashboard Only:
+Press `Ctrl+C` in the terminal where it's running
 
-```bash
-OPENAI_API_KEY=your_openai_key
-GOOGLE_API_KEY=your_google_key
-TAVILY_API_KEY=your_tavily_key
-```
+## Troubleshooting
 
-## Run
+### Common Issues:
 
-### Streamlit Dashboard
+**"Docker not running"**
+- Start Docker Desktop
+- Wait for it to fully load
+- Try the script again
 
-```bash
-streamlit run dashboard.py
-# Optional flags
-# streamlit run dashboard.py --server.port 8501 --server.headless true
-```
+**"Port already in use"**
+- Close other applications using ports 8000, 8501, 8080, 8081
+- Or stop Stock4U first: `docker-compose down`
 
-Key tabs:
-- Predictions: run the workflow for a ticker and timeframe
-- Chatbot: ask questions or trigger stock analysis via natural language
-- Market Data: quick 5‑day candlestick and metrics
+**"Python not found"**
+- Install Python 3.8+ from [python.org](https://www.python.org/downloads/)
+- Make sure to check "Add Python to PATH" during installation
 
-### CLI
+**"Permission denied" (Linux/macOS)**
+- Make scripts executable: `chmod +x scripts/*.sh`
+- Or run with sudo: `sudo ./scripts/start_stock4u.sh`
 
+**Dashboard not loading**
+- Check if it's running on http://localhost:8501
+- Try refreshing the browser
+- Check the terminal for error messages
+
+## Advanced Usage
+
+### Command Line Interface
 ```bash
 python main.py
 ```
 
-### Programmatic
-
+### Programmatic Access
 ```python
 from langgraph_flow import run_prediction
 
-result = run_prediction("AAPL", timeframe="1d", low_api_mode=False)
+result = run_prediction("AAPL", timeframe="1d")
 print(result)
 ```
 
 ### MCP Server (AI Integration)
-
 ```bash
 # Start MCP server
 python -m agents.mcp_server
 
 # Test with MCP CLI
 mcp dev agents.mcp_server --tool ping
-
-# Run demo
-python examples/mcp_demo.py
 ```
 
-**📖 See [MCP Integration Guide](docs/MCP_INTEGRATION_GUIDE.md) for detailed examples and use cases.**
+## Development
 
-## Tests
-
+### Running Tests
 ```bash
 python tests/run_all_tests.py
-# or
-pytest -q
 ```
 
-## Docs
-
-- Start here: `docs/README.md`
-- Additional guides: chatbot, workflow visualization, tool integration
-
-## Project Structure
-
+### Project Structure
 ```
 Stock4U/
-├── agents/                 # AI agent modules and tools
-├── api/                    # FastAPI backend
-├── backtesting/            # Backtesting framework
-├── cache/                  # Cache storage
-├── dashboard/              # Dashboard components
-├── deployment/             # Streamlit Cloud deployment files
-├── docs/                   # Documentation and user guides
-├── examples/               # Example usage
-├── llm/                    # LLM client wrappers
-├── ml/                     # Machine learning models
-├── models/                 # Database models
-├── ops/                    # Operations and monitoring
-├── portfolio/              # Portfolio management
-├── scripts/                # User-friendly setup scripts
-├── tests/                  # Test suite
-├── utils/                  # Helpers (logging, caching, fetchers)
-├── dashboard.py            # Streamlit UI (local)
-├── langgraph_flow.py       # Main LangGraph workflow
-├── main.py                 # CLI entry
-└── requirements.txt        # Dependencies
+├── agents/          # AI agent modules
+├── dashboard/       # User interface
+├── api/            # Backend services
+├── scripts/        # Setup scripts
+├── docs/           # Documentation
+└── tests/          # Test suite
 ```
 
-## 📁 Key Directories
+## Documentation
 
-- **`scripts/`** - One-click setup scripts for easy installation
-- **`deployment/`** - Files for Streamlit Cloud deployment
-- **`docs/`** - User guides and documentation
-- **`agents/`** - AI agents and workflow components
-- **`dashboard/`** - Dashboard UI components
+- **[Quick Start Guide](docs/QUICK_START.md)** - Detailed setup instructions
+- **[API Documentation](docs/README.md)** - Technical details
+- **[MCP Integration](docs/MCP_INTEGRATION_GUIDE.md)** - AI tool integration
+- **[Workflow Guide](docs/PROJECT_WORKFLOW.md)** - System architecture
 
-## Notes
+## Important Notes
 
-- This project is for educational/informational purposes only; not financial advice.
-- Some features (e.g., LLM calls) are optional and can be disabled via UI toggles.
+- **Educational Purpose**: This tool is for educational and informational purposes only
+- **Not Financial Advice**: Always do your own research and consult financial advisors
+- **Data Sources**: Uses yfinance for market data, which may have delays
+- **API Limits**: Some features may be rate-limited based on API provider policies
 
-## Repository
+## Support & Community
 
-GitHub: https://github.com/Vitalicize1/Stock4U
+- **Issues**: Report bugs on our repository
+- **Questions**: Check our documentation or open an issue
+- **Contributions**: We welcome pull requests and improvements
+- **Updates**: Follow our repository for the latest features
+
+## License
+
+This project is open source. See the repository for license details.
+
+---
+
+**Ready to start analyzing stocks with AI? Choose your setup option above and get started in minutes!**
+
+*Stock4U - Making stock analysis accessible to everyone*
 
 
