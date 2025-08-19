@@ -14,9 +14,10 @@ import streamlit as st
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 from pathlib import Path
-# Optional DB models: in cloud we avoid importing heavy DB deps
+# Optional DB models: allow DB in cloud when USE_POSTGRES=true
 try:
-    if os.getenv("STOCK4U_CLOUD") != "1":
+    _USE_POSTGRES = os.getenv("USE_POSTGRES", "false").lower() == "true"
+    if _USE_POSTGRES or os.getenv("STOCK4U_CLOUD") != "1":
         from models.database_models import User, create_tables  # type: ignore
     else:
         User = None  # type: ignore
@@ -34,11 +35,13 @@ class DashboardAuth:
     
     def __init__(self):
         """Initialize the authentication system."""
-        # For cloud environments, use Streamlit secrets for persistence
+        # Cloud flag
         self.is_cloud = os.getenv("STOCK4U_CLOUD") == "1"
-        
-        # Only try database in non-cloud environments
-        if not self.is_cloud and User is not None:
+        # DB enabled if models import succeeded (even in cloud with USE_POSTGRES=true)
+        self.db_enabled = User is not None
+
+        # Initialize DB when enabled
+        if self.db_enabled:
             try:
                 initialize_databases()
                 create_tables()
@@ -67,8 +70,8 @@ class DashboardAuth:
             except Exception:
                 pass
         
-        # For non-cloud or fallback, prefer DB users; fall back to file once and migrate
-        if not self.is_cloud and User is not None:
+        # Prefer DB users when DB is enabled
+        if self.db_enabled:
             try:
                 db_users = list(User.select())
                 if db_users:
@@ -93,8 +96,8 @@ class DashboardAuth:
                 for username, data in file_users.items():
                     if username not in users:
                         users[username] = data
-                # Migrate into DB (best-effort) when not in cloud
-                if not self.is_cloud:
+                # Migrate into DB (best-effort) when DB enabled
+                if self.db_enabled:
                     for username, data in file_users.items():
                         try:
                             if not User.get_by_username(username):
@@ -125,17 +128,18 @@ class DashboardAuth:
                 "last_login": None,
                 "email": "admin@stock4u.com"
             }
-            # Ensure admin exists in DB
-            try:
-                if not User.get_by_username(admin_username):
-                    User.create(
-                        username=admin_username,
-                        password_hash=hashed_password,
-                        email="admin@stock4u.com",
-                        role="admin",
-                    )
-            except Exception:
-                pass
+            # Ensure admin exists in DB when enabled
+            if self.db_enabled:
+                try:
+                    if not User.get_by_username(admin_username):
+                        User.create(
+                            username=admin_username,
+                            password_hash=hashed_password,
+                            email="admin@stock4u.com",
+                            role="admin",
+                        )
+                except Exception:
+                    pass
             # Save to file for legacy fallback
             self._save_users(users)
         
@@ -419,9 +423,10 @@ def show_login_page() -> bool:
         st.subheader("Create Account")
         st.markdown("Register a new account to access the dashboard.")
         
-        # Show cloud environment warning
-        if os.getenv("STOCK4U_CLOUD") == "1":
-            st.warning("⚠️ **Cloud Environment**: New accounts are temporary and will be deleted when the app restarts. For persistent accounts, contact the administrator.")
+        # Show warning only when DB persistence is NOT enabled
+        auth_state = DashboardAuth()
+        if os.getenv("STOCK4U_CLOUD") == "1" and not auth_state.db_enabled:
+            st.warning("⚠️ **Cloud Environment**: New accounts are temporary and will be deleted when the app restarts. Configure Postgres (USE_POSTGRES=true) for persistent accounts.")
         
         # Registration form
         with st.form("register_form"):
