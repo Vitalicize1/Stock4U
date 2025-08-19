@@ -117,10 +117,10 @@ function Test-SecurityConfiguration {
 function Start-Services {
     Write-Host "🚀 Starting Stock4U services..." -ForegroundColor Yellow
     
-    $composeFiles = @("docker-compose.yml")
+    $composeFiles = @("ops/docker-compose.yml")
     
     if ($Dev) {
-        $composeFiles += "docker-compose.dev.yml"
+        $composeFiles += "ops/docker-compose.dev.yml"
         Write-Host "🔧 Starting in development mode" -ForegroundColor Cyan
     }
     
@@ -149,7 +149,7 @@ function Show-ServiceStatus {
     Write-Host "📊 Service Status:" -ForegroundColor Cyan
     Write-Host "=================" -ForegroundColor Cyan
     
-    docker-compose ps
+    docker-compose -f ops/docker-compose.yml ps
     
     Write-Host ""
     Write-Host "🌐 Access URLs:" -ForegroundColor Cyan
@@ -212,8 +212,8 @@ try {
     
     Write-Host ""
     Write-Host "🎉 Stock4U is now running securely!" -ForegroundColor Green
-    Write-Host "💡 Use 'docker-compose logs -f' to view logs" -ForegroundColor Yellow
-    Write-Host "💡 Use 'docker-compose down' to stop services" -ForegroundColor Yellow
+    Write-Host "💡 Use 'docker-compose -f ops/docker-compose.yml logs -f' to view logs" -ForegroundColor Yellow
+    Write-Host "💡 Use 'docker-compose -f ops/docker-compose.yml down' to stop services" -ForegroundColor Yellow
     
 }
 catch {

@@ -239,13 +239,13 @@ redis-cli -a $REDIS_PASSWORD ping
 #### Network Access Issues
 ```bash
 # Check service status
-docker-compose ps
+docker-compose -f ops/docker-compose.yml ps
 
 # View service logs
-docker-compose logs [service-name]
+docker-compose -f ops/docker-compose.yml logs [service-name]
 
 # Test network connectivity
-docker-compose exec stock4u-api curl -f http://localhost:8000/health
+docker-compose -f ops/docker-compose.yml exec stock4u-api curl -f http://localhost:8000/health
 ```
 
 ### Security Checklist

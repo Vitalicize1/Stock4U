@@ -26,7 +26,7 @@ if (-not (Test-Path $tokenFile)) {
 
 # Start monitoring services
 Write-Host "🔧 Starting monitoring services..." -ForegroundColor Yellow
-docker-compose -f docker-compose.monitoring.yml up -d
+docker-compose -f ops/docker-compose.monitoring.yml up -d
 
 # Wait for services to start
 Write-Host "⏳ Waiting for services to start..." -ForegroundColor Yellow
@@ -34,7 +34,7 @@ Start-Sleep -Seconds 10
 
 # Check service status
 Write-Host "📊 Service Status:" -ForegroundColor Green
-docker-compose -f docker-compose.monitoring.yml ps
+docker-compose -f ops/docker-compose.monitoring.yml ps
 
 Write-Host ""
 Write-Host "🎉 Monitoring stack is ready!" -ForegroundColor Green
@@ -44,4 +44,4 @@ Write-Host "   Grafana:     http://localhost:3000 (admin/admin123)" -ForegroundC
 Write-Host "   Prometheus:  http://localhost:9090" -ForegroundColor White
 Write-Host "   AlertManager: http://localhost:9093" -ForegroundColor White
 Write-Host ""
-Write-Host "🔧 To stop monitoring: docker-compose -f docker-compose.monitoring.yml down" -ForegroundColor Yellow
+Write-Host "🔧 To stop monitoring: docker-compose -f ops/docker-compose.monitoring.yml down" -ForegroundColor Yellow

@@ -113,7 +113,7 @@ TAVILY_API_KEY=your_tavily_key_here
 
 ### Full Setup:
 ```bash
-docker-compose down
+docker-compose -f ops/docker-compose.yml down
 ```
 
 ### Dashboard Only:

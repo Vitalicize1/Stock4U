@@ -11,8 +11,8 @@ services:
       GF_USERS_ALLOW_SIGN_UP: false
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./ops/grafana/provisioning:/etc/grafana/provisioning
-      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
     networks:
       - stock4u-network
     restart: unless-stopped
@@ -25,8 +25,8 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./ops/prometheus/token.txt:/etc/prometheus/token.txt
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/token.txt:/etc/prometheus/token.txt
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -45,7 +45,7 @@ services:
     ports:
       - "9093:9093"
     volumes:
-      - ./ops/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
       - alertmanager_data:/alertmanager
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
@@ -65,3 +65,5 @@ volumes:
 networks:
   stock4u-network:
     external: true
+
+

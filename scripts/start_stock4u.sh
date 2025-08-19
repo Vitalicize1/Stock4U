@@ -82,7 +82,7 @@ echo "This may take a few minutes on first run..."
 echo
 
 # Start the services
-docker-compose up -d
+docker-compose -f ops/docker-compose.yml up -d
 
 # Wait for services to be ready
 echo
@@ -92,7 +92,7 @@ sleep 10
 # Check if services are running
 echo
 echo "Checking service status..."
-docker-compose ps
+docker-compose -f ops/docker-compose.yml ps
 
 echo
 echo "========================================"
@@ -108,8 +108,8 @@ echo
 echo "Default credentials:"
 echo "- PgAdmin: admin@stock4u.com / admin_password"
 echo
-echo "To stop Stock4U, run: docker-compose down"
-echo "To view logs, run: docker-compose logs -f"
+echo "To stop Stock4U, run: docker-compose -f ops/docker-compose.yml down"
+echo "To view logs, run: docker-compose -f ops/docker-compose.yml logs -f"
 echo
 
 # Try to open dashboard in browser

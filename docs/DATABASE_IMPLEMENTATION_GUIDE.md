@@ -51,7 +51,7 @@ pip install -r requirements.txt
 
 ```bash
 # Start database services
-docker-compose up -d postgres redis
+docker-compose -f ops/docker-compose.yml up -d postgres redis
 
 # Initialize database
 python utils/init_database.py

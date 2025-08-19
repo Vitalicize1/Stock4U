@@ -81,7 +81,7 @@ This directory contains easy-to-use scripts to get Stock4U up and running quickl
 5. **Start Dashboard**: Streamlit application
 
 ### Stop Scripts (`stop_stock4u.*`)
-1. **Stop Containers**: `docker-compose down`
+1. **Stop Containers**: `docker-compose -f ops/docker-compose.yml down`
 2. **Clean Resources**: `docker system prune`
 3. **Confirm Completion**: Status message
 

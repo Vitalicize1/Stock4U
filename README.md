@@ -122,7 +122,7 @@ TAVILY_API_KEY=your_tavily_key_here
 
 ### Full Setup:
 ```bash
-docker-compose down
+docker-compose -f ops/docker-compose.yml down
 ```
 
 ### Dashboard Only:
@@ -139,7 +139,7 @@ Press `Ctrl+C` in the terminal where it's running
 
 **"Port already in use"**
 - Close other applications using ports 8000, 8501, 8080, 8081
-- Or stop Stock4U first: `docker-compose down`
+- Or stop Stock4U first: `docker-compose -f ops/docker-compose.yml down`
 
 **"Python not found"**
 - Install Python 3.8+ from [python.org](https://www.python.org/downloads/)

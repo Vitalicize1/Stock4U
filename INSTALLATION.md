@@ -132,7 +132,7 @@ After setup, you should see:
 
 **"Port already in use"**
 - Close other applications using ports 8000, 8501, 8080, 8081
-- Or stop Stock4U first: `docker-compose down`
+- Or stop Stock4U first: `docker-compose -f ops/docker-compose.yml down`
 
 **Dashboard not loading**
 - Check if it's running on http://localhost:8501
@@ -160,7 +160,7 @@ TAVILY_API_KEY=your_tavily_key_here
 
 ### Full Setup:
 ```bash
-docker-compose down
+docker-compose -f ops/docker-compose.yml down
 ```
 
 ### Dashboard Only:

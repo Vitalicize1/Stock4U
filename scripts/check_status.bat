@@ -5,7 +5,7 @@ echo ========================================
 echo.
 
 echo Checking Docker containers...
-docker-compose ps
+docker-compose -f ops\docker-compose.yml ps
 
 echo.
 echo Checking service health...

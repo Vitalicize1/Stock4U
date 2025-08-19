@@ -84,7 +84,7 @@
 ### Q: "Port already in use" error
 **A:** 
 1. Close other applications using ports 8000, 8501, 8080, 8081
-2. Or stop Stock4U first: `docker-compose down`
+2. Or stop Stock4U first: `docker-compose -f ops/docker-compose.yml down`
 
 ### Q: Predictions are taking too long
 **A:** 
@@ -142,7 +142,7 @@ TAVILY_API_KEY=your_tavily_key_here
 
 ### Q: How do I stop Stock4U?
 **A:** 
-- **Full Setup**: Run `docker-compose down` in the terminal
+- **Full Setup**: Run `docker-compose -f ops/docker-compose.yml down` in the terminal
 - **Dashboard Only**: Press `Ctrl+C` in the terminal where it's running
 
 ### Q: How do I update Stock4U?

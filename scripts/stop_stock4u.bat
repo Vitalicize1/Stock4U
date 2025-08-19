@@ -5,7 +5,7 @@ echo ========================================
 echo.
 
 echo Stopping Docker containers...
-docker-compose down
+docker-compose -f ops\docker-compose.yml down
 
 echo.
 echo Cleaning up...

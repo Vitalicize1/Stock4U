@@ -13,7 +13,7 @@ This guide covers setting up comprehensive monitoring for your Stock4U productio
 .\start_monitoring.ps1
 
 # Or manually:
-docker-compose -f docker-compose.monitoring.yml up -d
+docker-compose -f ops/docker-compose.monitoring.yml up -d
 ```
 
 ### 2. Access Dashboards
@@ -145,7 +145,7 @@ Alerts are routed to:
 
 ```bash
 # Check service status
-docker-compose -f docker-compose.monitoring.yml ps
+docker-compose -f ops/docker-compose.monitoring.yml ps
 
 # View logs
 docker logs stock4u-prometheus
@@ -156,7 +156,7 @@ docker logs stock4u-alertmanager
 curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8000/metrics
 
 # Restart services
-docker-compose -f docker-compose.monitoring.yml restart
+docker-compose -f ops/docker-compose.monitoring.yml restart
 ```
 
 ## 📋 Production Checklist
