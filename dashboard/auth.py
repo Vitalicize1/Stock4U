@@ -14,7 +14,18 @@ import streamlit as st
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 from pathlib import Path
-from models.database_models import User, create_tables
+# Optional DB models: in cloud we avoid importing heavy DB deps
+try:
+    if os.getenv("STOCK4U_CLOUD") != "1":
+        from models.database_models import User, create_tables  # type: ignore
+    else:
+        User = None  # type: ignore
+        def create_tables():
+            return None
+except Exception:
+    User = None  # type: ignore
+    def create_tables():
+        return None
 from utils.database import initialize_databases
 
 
@@ -27,7 +38,7 @@ class DashboardAuth:
         self.is_cloud = os.getenv("STOCK4U_CLOUD") == "1"
         
         # Only try database in non-cloud environments
-        if not self.is_cloud:
+        if not self.is_cloud and User is not None:
             try:
                 initialize_databases()
                 create_tables()
@@ -57,7 +68,7 @@ class DashboardAuth:
                 pass
         
         # For non-cloud or fallback, prefer DB users; fall back to file once and migrate
-        if not self.is_cloud:
+        if not self.is_cloud and User is not None:
             try:
                 db_users = list(User.select())
                 if db_users:
@@ -186,7 +197,7 @@ class DashboardAuth:
         hashed_password = self._hash_password(password)
         
         # Only use database in non-cloud environments
-        if not self.is_cloud:
+        if not self.is_cloud and User is not None:
             try:
                 User.create(username=username, password_hash=hashed_password, email=email, role="user")
             except Exception:
@@ -217,10 +228,12 @@ class DashboardAuth:
             user["last_login"] = datetime.now().isoformat()
         else:
             # Try DB auth first for local environments
-            try:
-                db_user = User.get_by_username(username)
-            except Exception:
-                db_user = None
+            db_user = None
+            if User is not None:
+                try:
+                    db_user = User.get_by_username(username)
+                except Exception:
+                    db_user = None
             if db_user is not None:
                 if not self._verify_password(password, db_user.password_hash):
                     return False
