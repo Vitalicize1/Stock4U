@@ -14,6 +14,8 @@ import streamlit as st
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 from pathlib import Path
+from models.database_models import User, create_tables
+from utils.database import initialize_databases
 
 
 class DashboardAuth:
@@ -21,20 +23,79 @@ class DashboardAuth:
     
     def __init__(self):
         """Initialize the authentication system."""
+        # For cloud environments, use Streamlit secrets for persistence
+        self.is_cloud = os.getenv("STOCK4U_CLOUD") == "1"
+        
+        # Only try database in non-cloud environments
+        if not self.is_cloud:
+            try:
+                initialize_databases()
+                create_tables()
+            except Exception:
+                pass
+
         self.users_file = Path("cache/users.json")
         self.users = self._load_users()
         self.session_timeout = timedelta(hours=8)  # 8 hour session timeout
         self.password_reset_tokens = {}  # Store reset tokens temporarily
     
     def _load_users(self) -> Dict[str, Dict[str, Any]]:
-        """Load users from file or create default admin user."""
+        """Load users from Streamlit secrets (cloud) or database/file (local)."""
         users = {}
         
-        # Try to load existing users from file
+        # In cloud environments, try to load from Streamlit secrets first
+        if self.is_cloud:
+            try:
+                # Load users from Streamlit secrets (read-only) first
+                if hasattr(st, 'secrets') and 'users' in st.secrets:
+                    users_data = st.secrets['users']
+                    for username, user_data in users_data.items():
+                        users[username] = dict(user_data)
+                # Do NOT return early: merge with file-based registrations so
+                # users created via the Register tab are available to Login
+            except Exception:
+                pass
+        
+        # For non-cloud or fallback, prefer DB users; fall back to file once and migrate
+        if not self.is_cloud:
+            try:
+                db_users = list(User.select())
+                if db_users:
+                    for u in db_users:
+                        users[u.username] = {
+                            "password_hash": u.password_hash,
+                            "role": u.role,
+                            "created_at": u.created_at.isoformat(),
+                            "last_login": u.last_login.isoformat() if u.last_login else None,
+                            "email": u.email or None,
+                        }
+                    return users
+            except Exception:
+                pass
+
+        # If DB empty and legacy file exists, load and migrate to DB
         if self.users_file.exists():
             try:
                 with open(self.users_file, 'r', encoding='utf-8') as f:
-                    users = json.load(f)
+                    file_users = json.load(f)
+                # Merge file users into memory (do not overwrite secrets/admin)
+                for username, data in file_users.items():
+                    if username not in users:
+                        users[username] = data
+                # Migrate into DB (best-effort) when not in cloud
+                if not self.is_cloud:
+                    for username, data in file_users.items():
+                        try:
+                            if not User.get_by_username(username):
+                                User.create(
+                                    username=username,
+                                    password_hash=data.get("password_hash", ""),
+                                    email=data.get("email"),
+                                    role=data.get("role", "user"),
+                                    last_login=datetime.fromisoformat(data["last_login"]) if data.get("last_login") else None,
+                                )
+                        except Exception:
+                            pass
             except Exception as e:
                 st.error(f"Error loading users: {e}")
         
@@ -53,8 +114,18 @@ class DashboardAuth:
                 "last_login": None,
                 "email": "admin@stock4u.com"
             }
-            
-            # Save to file
+            # Ensure admin exists in DB
+            try:
+                if not User.get_by_username(admin_username):
+                    User.create(
+                        username=admin_username,
+                        password_hash=hashed_password,
+                        email="admin@stock4u.com",
+                        role="admin",
+                    )
+            except Exception:
+                pass
+            # Save to file for legacy fallback
             self._save_users(users)
         
         return users
@@ -95,18 +166,32 @@ class DashboardAuth:
             result["message"] = "Password must be at least 6 characters long."
             return result
         
-        if username in self.users:
-            result["message"] = "Username already exists."
-            return result
+        # Check DB for duplicates
+        try:
+            if User.get_by_username(username):
+                result["message"] = "Username already exists."
+                return result
+        except Exception:
+            pass
         
         # Check if email is already used
-        for user in self.users.values():
-            if user.get("email") == email:
+        try:
+            if email and User.get_by_email(email):
                 result["message"] = "Email already registered."
                 return result
+        except Exception:
+            pass
         
-        # Create new user
+        # Create new user (DB first for local, file for cloud)
         hashed_password = self._hash_password(password)
+        
+        # Only use database in non-cloud environments
+        if not self.is_cloud:
+            try:
+                User.create(username=username, password_hash=hashed_password, email=email, role="user")
+            except Exception:
+                pass
+        
         self.users[username] = {
             "password_hash": hashed_password,
             "role": "user",
@@ -114,8 +199,6 @@ class DashboardAuth:
             "last_login": None,
             "email": email
         }
-        
-        # Save to file
         self._save_users(self.users)
         
         result["success"] = True
@@ -124,20 +207,46 @@ class DashboardAuth:
     
     def login(self, username: str, password: str) -> bool:
         """Authenticate a user with username and password."""
-        if username not in self.users:
-            return False
-        
-        user = self.users[username]
-        if not self._verify_password(password, user["password_hash"]):
-            return False
-        
-        # Update last login
-        user["last_login"] = datetime.now().isoformat()
+        # In cloud environments, use in-memory users (loaded from secrets or defaults)
+        if self.is_cloud:
+            if username not in self.users:
+                return False
+            user = self.users[username]
+            if not self._verify_password(password, user["password_hash"]):
+                return False
+            user["last_login"] = datetime.now().isoformat()
+        else:
+            # Try DB auth first for local environments
+            try:
+                db_user = User.get_by_username(username)
+            except Exception:
+                db_user = None
+            if db_user is not None:
+                if not self._verify_password(password, db_user.password_hash):
+                    return False
+                try:
+                    db_user.last_login = datetime.now()
+                    db_user.save()
+                except Exception:
+                    pass
+            else:
+                # Legacy file check
+                if username not in self.users:
+                    return False
+                user = self.users[username]
+                if not self._verify_password(password, user["password_hash"]):
+                    return False
+                user["last_login"] = datetime.now().isoformat()
         
         # Store user info in session state
         st.session_state["authenticated"] = True
         st.session_state["username"] = username
-        st.session_state["user_role"] = user["role"]
+        # Prefer DB role if available in local mode, else fallback to merged in-memory users
+        try:
+            role_val = (db_user.role if (not self.is_cloud and db_user is not None) else None)
+        except Exception:
+            role_val = None
+        st.session_state["user_role"] = role_val or self.users.get(username, {}).get("role", "user")
         st.session_state["login_time"] = datetime.now().isoformat()
         
         return True
@@ -276,6 +385,10 @@ def show_login_page() -> bool:
         st.subheader("Login")
         st.markdown("Enter your credentials to access the dashboard.")
         
+        # Show default credentials info in cloud environment
+        if os.getenv("STOCK4U_CLOUD") == "1":
+            st.info("💡 **Default Admin Account**: Username `admin`, Password `stock4u2024`")
+        
         # Login form
         with st.form("login_form"):
             username = st.text_input("Username", placeholder="Enter your username")
@@ -292,6 +405,10 @@ def show_login_page() -> bool:
     with tab2:
         st.subheader("Create Account")
         st.markdown("Register a new account to access the dashboard.")
+        
+        # Show cloud environment warning
+        if os.getenv("STOCK4U_CLOUD") == "1":
+            st.warning("⚠️ **Cloud Environment**: New accounts are temporary and will be deleted when the app restarts. For persistent accounts, contact the administrator.")
         
         # Registration form
         with st.form("register_form"):
