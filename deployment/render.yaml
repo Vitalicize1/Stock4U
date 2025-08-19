@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: stock4u-daily-picks
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python deployment/daily_picks_service.py
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DAILY_PICKS_PATH
+        value: /tmp/daily_picks.json
+      - key: DAILY_PICKS_AUTO_GENERATE
+        value: true
+      - key: DAILY_PICKS_MAX_AGE_HOURS
+        value: 24
+      - key: DAILY_PICKS_PORT
+        value: 10000
+      - key: DAILY_PICKS_HOST
+        value: 0.0.0.0
+      - key: DAILY_PICKS_TIMEFRAME
+        value: 1d
+      - key: DAILY_PICKS_TOP_N
+        value: 3
+      - key: DAILY_PICKS_LOW_API
+        value: 1
+      - key: DAILY_PICKS_FAST_TA
+        value: 1

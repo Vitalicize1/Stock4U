@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # Centralized Daily Picks Service
+  daily-picks-service:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.daily-picks
+    container_name: stock4u-daily-picks
+    restart: unless-stopped
+    ports:
+      - "8001:8001"  # Exposed port for all user servers to access
+    environment:
+      - DAILY_PICKS_PATH=/app/cache/daily_picks.json
+      - DAILY_PICKS_AUTO_GENERATE=true
+      - DAILY_PICKS_MAX_AGE_HOURS=24
+      - DAILY_PICKS_PORT=8001
+      - DAILY_PICKS_HOST=0.0.0.0
+      # Scheduler settings
+      - DAILY_PICKS_CRON=0 14 * * 1-5  # 2 PM UTC, weekdays
+      - DAILY_PICKS_TIMEFRAME=1d
+      - DAILY_PICKS_TOP_N=3
+      - DAILY_PICKS_LOW_API=1
+      - DAILY_PICKS_FAST_TA=1
+    volumes:
+      - daily_picks_cache:/app/cache
+      - daily_picks_logs:/app/logs
+    networks:
+      - daily-picks-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+
+  # Optional: Nginx reverse proxy for SSL and caching
+  daily-picks-proxy:
+    image: nginx:alpine
+    container_name: stock4u-daily-picks-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx-daily-picks.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    networks:
+      - daily-picks-network
+    depends_on:
+      - daily-picks-service
+    profiles:
+      - production  # Only for production with SSL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  daily_picks_cache:
+    driver: local
+  daily_picks_logs:
+    driver: local
+
+networks:
+  daily-picks-network:
+    driver: bridge

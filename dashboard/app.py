@@ -520,9 +520,8 @@ def main() -> None:
         
         # Load daily picks data
         try:
-            from dashboard.components.daily_picks import _load_cache
-            from pathlib import Path
-            data = _load_cache(Path("cache/daily_picks.json"))
+            from dashboard.components.daily_picks import load_daily_picks
+            data = load_daily_picks("cache/daily_picks.json")
             
             if data and data.get("picks"):
                 picks = data["picks"]

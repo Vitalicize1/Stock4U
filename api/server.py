@@ -559,3 +559,26 @@ def metrics(_: None = Depends(auth_guard)) -> Response:
     
     return Response("\n".join(lines) + "\n", media_type="text/plain")
 
+
+@app.get("/daily_picks")
+def get_daily_picks() -> dict:
+    """Return the latest daily picks payload. Public, read-only.
+
+    Reads from the same path used by the background job, configurable via DAILY_PICKS_PATH.
+    """
+    try:
+        from pathlib import Path
+        import json as _json
+        import os as _os
+        path = Path(_os.getenv("DAILY_PICKS_PATH", "cache/daily_picks.json"))
+        if not path.exists():
+            return {"generated_at": None, "picks": []}
+        with open(path, "r", encoding="utf-8") as f:
+            data = _json.load(f)
+        # Ensure shape
+        if isinstance(data, dict) and "picks" in data:
+            return data
+        return {"generated_at": None, "picks": []}
+    except Exception as e:
+        # Do not leak internals; return empty payload on error
+        return {"generated_at": None, "picks": []}
