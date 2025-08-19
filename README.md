@@ -4,6 +4,8 @@
 
 Stock4U is a comprehensive multi-agent stock analysis system that combines technical analysis, sentiment analysis, and AI predictions to help you make informed investment decisions.
 
+ Live on Streamlit: [stock4you.streamlit.app](https://stock4you.streamlit.app/)
+
 ## Key Features
 
 - **AI-Powered Predictions** - Multi-agent LangGraph workflow for accurate stock forecasts
