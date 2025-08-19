@@ -398,9 +398,9 @@ def show_login_page() -> bool:
         st.subheader("Login")
         st.markdown("Enter your credentials to access the dashboard.")
         
-        # Show default credentials info in cloud environment
-        if os.getenv("STOCK4U_CLOUD") == "1":
-            st.info("💡 **Default Admin Account**: Username `admin`, Password `stock4u2024`")
+        # Optional: show default admin hint only if explicitly enabled
+        if os.getenv("SHOW_ADMIN_HINT", "0") == "1":
+            st.info("Admin hint enabled by SHOW_ADMIN_HINT=1 environment variable.")
         
         # Login form
         with st.form("login_form"):
