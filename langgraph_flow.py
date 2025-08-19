@@ -283,6 +283,8 @@ def create_llm_agent_wrapper(agent, agent_name: str):
                         trend = {"status": "success", "trend_analysis": {}}
                     else:
                         trend = perform_trend_analysis.invoke({"ticker": ticker, "period": period})
+                    # Ensure support/resistance is always produced for downstream UIs
+                    sr = analyze_support_resistance.invoke({"ticker": ticker, "period": period})
                     signals = generate_trading_signals.invoke({"ticker": ticker, "period": period})
 
                     # Optional short-term and confirmation tools (best-effort)
@@ -357,6 +359,10 @@ def create_llm_agent_wrapper(agent, agent_name: str):
                             k: v for k, v in trend_analysis.items() if k not in ("status", "ticker")
                         }
 
+                    support_resistance = sr if isinstance(sr, dict) else {}
+                    if "status" in support_resistance:
+                        support_resistance = {k: v for k, v in support_resistance.items() if k not in ("status", "ticker")}
+
                     trading_signals = signals if isinstance(signals, dict) else {}
                     if trading_signals.get("status") == "success":
                         # keep as is
@@ -370,6 +376,7 @@ def create_llm_agent_wrapper(agent, agent_name: str):
                     technical_analysis = {
                         "indicators": indicators,
                         "trend_analysis": trend_analysis,
+                        "support_resistance": support_resistance,
                         "trading_signals": trading_signals,
                         "technical_score": tech_score,
                     }
@@ -519,6 +526,7 @@ def create_llm_agent_wrapper(agent, agent_name: str):
                                 "calculate_advanced_indicators",
                                 "perform_trend_analysis",
                                 "generate_trading_signals",
+                                "analyze_support_resistance",
                                 "calculate_short_term_indicators",
                                 "compute_supertrend",
                                 "compute_ichimoku_cloud",
@@ -559,6 +567,16 @@ def create_llm_agent_wrapper(agent, agent_name: str):
                                         or payload.get("data")
                                         or payload
                                     )
+                                elif msg.name == "analyze_support_resistance":
+                                    # Support/Resistance tool returns flat keys with status/ticker
+                                    sr_res = {
+                                        k: v for k, v in (payload or {}).items() if k not in ("status", "ticker")
+                                    }
+                                    # Attach to a local variable captured outside this loop
+                                    try:
+                                        _sr_holder.update(sr_res)
+                                    except Exception:
+                                        _sr_holder = sr_res.copy()
                                 elif msg.name == "calculate_short_term_indicators":
                                     short_term_res = (
                                         payload.get("current_indicators")
@@ -591,7 +609,7 @@ def create_llm_agent_wrapper(agent, agent_name: str):
                                     )
 
                         # If we captured anything, build the normalized technical_analysis
-                        if indicators_res or trend_res or signals_res or short_term_res or ichimoku_res or supertrend_res or keltner_res or donchian_res:
+                        if indicators_res or trend_res or signals_res or short_term_res or ichimoku_res or supertrend_res or keltner_res or donchian_res or locals().get('_sr_holder'):
                             merged_indicators = {}
                             for src in [indicators_res, short_term_res, ichimoku_res, supertrend_res, keltner_res, donchian_res]:
                                 if isinstance(src, dict):
@@ -600,6 +618,7 @@ def create_llm_agent_wrapper(agent, agent_name: str):
                                 "indicators": merged_indicators,
                                 "trend_analysis": trend_res or {},
                                 "trading_signals": signals_res or {},
+                                "support_resistance": locals().get('_sr_holder', {}),
                             }
 
                             # Compute a lightweight technical_score if not provided
