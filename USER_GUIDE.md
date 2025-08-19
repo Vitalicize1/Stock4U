@@ -198,7 +198,7 @@ This opens an interactive CLI where you can:
 ## Getting Help
 
 - **Documentation**: Check the [main README](README.md)
-- **Installation Issues**: See the [Installation Guide](INSTALLATION.md)
+- **Installation Issues**: See the [Installation Guide](docs/INSTALLATION.md)
 - **Technical Problems**: Review the troubleshooting sections
 - **Feature Requests**: Open an issue on our GitHub repository
 - **Community Support**: Join our community discussions
