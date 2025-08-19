@@ -10,7 +10,7 @@ This guide covers setting up comprehensive monitoring for your Stock4U productio
 
 ```powershell
 # Windows PowerShell
-.\start_monitoring.ps1
+.\scripts\start_monitoring.ps1
 
 # Or manually:
 docker-compose -f ops/docker-compose.monitoring.yml up -d

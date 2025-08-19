@@ -3,7 +3,9 @@ version: '3.8'
 services:
   # Main application
   stock4u-api:
-    build: ..
+    build:
+      context: ..
+      dockerfile: ops/docker/Dockerfile
     container_name: stock4u-api
     restart: unless-stopped
     ports:

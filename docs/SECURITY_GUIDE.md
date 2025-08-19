@@ -41,7 +41,7 @@ PGADMIN_PASSWORD=your_secure_pgadmin_password_here
 
 ```powershell
 # Generate self-signed certificates for development
-.\start_secure.ps1 -GenerateSSL
+.\scripts\start_secure.ps1 -GenerateSSL
 
 # Or manually
 .\ops\security\generate_ssl_cert.ps1
@@ -51,13 +51,13 @@ PGADMIN_PASSWORD=your_secure_pgadmin_password_here
 
 ```powershell
 # Production mode
-.\start_secure.ps1
+.\scripts\start_secure.ps1
 
 # Development mode (includes monitoring)
-.\start_secure.ps1 -Dev
+.\scripts\start_secure.ps1 -Dev
 
 # Security check only
-.\start_secure.ps1 -CheckSecurity
+.\scripts\start_secure.ps1 -CheckSecurity
 ```
 
 ## 🛡️ Security Features
@@ -218,7 +218,7 @@ add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
 #### SSL Certificate Errors
 ```bash
 # Regenerate certificates
-.\start_secure.ps1 -GenerateSSL
+.\scripts\start_secure.ps1 -GenerateSSL
 
 # Check certificate validity
 openssl x509 -in ops/security/ssl/cert.pem -text -noout
