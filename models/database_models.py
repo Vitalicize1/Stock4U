@@ -14,7 +14,11 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 from peewee import *
-from playhouse.postgres_ext import *
+# Optional Postgres extensions; safe to skip when not installed
+try:
+    from playhouse.postgres_ext import *  # type: ignore
+except Exception:  # pragma: no cover - not required for SQLite
+    pass
 from utils.database import get_peewee_db
 
 # Database instance - will be initialized lazily
@@ -27,9 +31,11 @@ def get_database():
         try:
             _database = get_peewee_db()
         except Exception:
-            # Fallback to SQLite for development
+            # Fallback to file-based SQLite to persist locally
             from peewee import SqliteDatabase
-            _database = SqliteDatabase(':memory:')
+            from pathlib import Path
+            Path('cache').mkdir(exist_ok=True)
+            _database = SqliteDatabase('cache/stock4u.db')
     return _database
 
 
@@ -59,6 +65,34 @@ class BaseModel(Model):
             data[field.name] = value
         return data
 
+
+class User(BaseModel):
+    """User accounts for dashboard authentication."""
+
+    id = UUIDField(primary_key=True, default=uuid.uuid4)
+    username = CharField(max_length=50, unique=True, index=True)
+    password_hash = CharField(max_length=255)
+    email = CharField(max_length=255, null=True, unique=True)
+    role = CharField(max_length=20, default="user")
+    is_active = BooleanField(default=True)
+    last_login = DateTimeField(null=True)
+
+    class Meta:
+        table_name = 'users'
+
+    @classmethod
+    def get_by_username(cls, username: str) -> Optional['User']:
+        try:
+            return cls.get(cls.username == username)
+        except cls.DoesNotExist:
+            return None
+
+    @classmethod
+    def get_by_email(cls, email: str) -> Optional['User']:
+        try:
+            return cls.get((cls.email.is_null(False)) & (cls.email == email))
+        except cls.DoesNotExist:
+            return None
 
 class Prediction(BaseModel):
     """Model for storing prediction results and analysis."""
@@ -462,23 +496,30 @@ class DailyPick(BaseModel):
 
 # Create tables
 def create_tables():
-    """Create all database tables."""
-    tables = [Prediction, CacheEntry, UserSession, SystemMetric, DailyPick]
-    
-    with database:
-        database.create_tables(tables, safe=True)
-    
-    print("✅ Database tables created successfully")
+    """Create all database tables using the active database (Postgres or SQLite)."""
+    tables = [Prediction, CacheEntry, UserSession, SystemMetric, DailyPick, User]
+    db = get_database()
+    # Ensure models are bound to the active database
+    for m in tables:
+        m._meta.set_database(db)
+    with db:
+        db.create_tables(tables, safe=True)
+    try:
+        print("✅ Database tables created successfully")
+    except Exception:
+        pass
 
 
 def drop_tables():
     """Drop all database tables (use with caution!)."""
-    tables = [Prediction, CacheEntry, UserSession, SystemMetric, DailyPick]
-    
-    with database:
-        database.drop_tables(tables, safe=True)
-    
-    print("🗑️ Database tables dropped successfully")
+    tables = [Prediction, CacheEntry, UserSession, SystemMetric, DailyPick, User]
+    db = get_database()
+    with db:
+        db.drop_tables(tables, safe=True)
+    try:
+        print("🗑️ Database tables dropped successfully")
+    except Exception:
+        pass
 
 
 # Initialize tables when module is imported

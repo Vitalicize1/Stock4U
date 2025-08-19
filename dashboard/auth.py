@@ -14,10 +14,11 @@ import streamlit as st
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 from pathlib import Path
-# Optional DB models: allow DB in cloud when USE_POSTGRES=true
+# Optional DB models: enable SQLite/Postgres based on env
 try:
     _USE_POSTGRES = os.getenv("USE_POSTGRES", "false").lower() == "true"
-    if _USE_POSTGRES or os.getenv("STOCK4U_CLOUD") != "1":
+    _FALLBACK_SQLITE = os.getenv("FALLBACK_TO_SQLITE", "true").lower() == "true"
+    if _USE_POSTGRES or _FALLBACK_SQLITE or os.getenv("STOCK4U_CLOUD") != "1":
         from models.database_models import User, create_tables  # type: ignore
     else:
         User = None  # type: ignore
