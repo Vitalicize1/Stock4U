@@ -28,15 +28,7 @@ Stock4U combines a layered architecture—data collection, analysis, prediction,
   - Proprietary premium data sources unless configured by the user
 
 ### Workflow
-The prediction workflow is implemented as a LangGraph pipeline with a single entry point and multiple guarded exits. High‑level flow: Orchestrator → Data Collector → Technical Analyzer → Sentiment Analyzer → Sentiment Integrator → Prediction Agent → Evaluator/Optimizer → Elicitation → Output.
-
-- Workflow overview: PROJECT_WORKFLOW.md
-- Entry/exit diagram: WORKFLOW_DIAGRAM.md
-- Data flow diagram (image): data_flow_diagram.png
-- Editable diagram (draw.io): ../Stock4U Agentic Workflow.drawio
-- Code entry points: `langgraph_flow.py` (workflow), `dashboard/app.py` and `chatbot_interface.py` (interfaces)
-
-Invocation examples and getting started are available in README.md and docs/QUICK_START.md. The main programmatic entry is the `run_prediction(ticker, timeframe)` function referenced in the workflow docs.
+Open the workflow diagram in draw.io: [Stock4U Agentic Workflow.drawio](../Stock4U%20Agentic%20Workflow.drawio)
 
 ### Success Metrics (targets)
 - Direction accuracy: > 60%
