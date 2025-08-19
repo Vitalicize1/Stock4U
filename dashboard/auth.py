@@ -198,11 +198,10 @@ class DashboardAuth:
         except Exception:
             pass
         
-        # Create new user (DB first for local, file for cloud)
+        # Create new user (DB first when enabled)
         hashed_password = self._hash_password(password)
         
-        # Only use database in non-cloud environments
-        if not self.is_cloud and User is not None:
+        if self.db_enabled:
             try:
                 User.create(username=username, password_hash=hashed_password, email=email, role="user")
             except Exception:
@@ -223,45 +222,36 @@ class DashboardAuth:
     
     def login(self, username: str, password: str) -> bool:
         """Authenticate a user with username and password."""
-        # In cloud environments, use in-memory users (loaded from secrets or defaults)
-        if self.is_cloud:
+        # Try DB first when enabled so Register and Login share the same store
+        db_user = None
+        if self.db_enabled:
+            try:
+                db_user = User.get_by_username(username)
+            except Exception:
+                db_user = None
+        if db_user is not None:
+            if not self._verify_password(password, db_user.password_hash):
+                return False
+            try:
+                db_user.last_login = datetime.now()
+                db_user.save()
+            except Exception:
+                pass
+        else:
+            # Fallback to merged in-memory map (secrets + file)
             if username not in self.users:
                 return False
             user = self.users[username]
             if not self._verify_password(password, user["password_hash"]):
                 return False
             user["last_login"] = datetime.now().isoformat()
-        else:
-            # Try DB auth first for local environments
-            db_user = None
-            if User is not None:
-                try:
-                    db_user = User.get_by_username(username)
-                except Exception:
-                    db_user = None
-            if db_user is not None:
-                if not self._verify_password(password, db_user.password_hash):
-                    return False
-                try:
-                    db_user.last_login = datetime.now()
-                    db_user.save()
-                except Exception:
-                    pass
-            else:
-                # Legacy file check
-                if username not in self.users:
-                    return False
-                user = self.users[username]
-                if not self._verify_password(password, user["password_hash"]):
-                    return False
-                user["last_login"] = datetime.now().isoformat()
         
         # Store user info in session state
         st.session_state["authenticated"] = True
         st.session_state["username"] = username
         # Prefer DB role if available in local mode, else fallback to merged in-memory users
         try:
-            role_val = (db_user.role if (not self.is_cloud and db_user is not None) else None)
+            role_val = (db_user.role if (db_user is not None) else None)
         except Exception:
             role_val = None
         st.session_state["user_role"] = role_val or self.users.get(username, {}).get("role", "user")
