@@ -118,14 +118,17 @@ class TechnicalAnalyzerTools:
 
             # Fetch fresh
             import concurrent.futures as _f
-            timeout_s = int(os.getenv("STOCK4U_TA_TIMEOUT_FETCH", "8"))
+            # Increase timeout for cloud environments
+            default_timeout = "15" if os.getenv("STOCK4U_CLOUD") == "1" else "8"
+            timeout_s = int(os.getenv("STOCK4U_TA_TIMEOUT_FETCH", default_timeout))
             def _fetch():
                 return yf.Ticker(ticker).history(period=period)
             with _f.ThreadPoolExecutor(max_workers=1) as pool:
                 fut = pool.submit(_fetch)
                 try:
                     data = fut.result(timeout=timeout_s)
-                except Exception:
+                except Exception as e:
+                    print(f"Warning: Data fetch timeout for {ticker} ({period}): {e}")
                     data = expired_df if isinstance(expired_df, pd.DataFrame) else pd.DataFrame()
 
             # Write caches (best-effort)
@@ -639,10 +642,34 @@ def analyze_support_resistance(ticker: str, period: str = "6mo") -> Dict[str, An
         data = tools._get_price_data(ticker, period)
         
         if data.empty:
-            return {
-                "status": "error",
-                "error": "No data available for support/resistance analysis"
-            }
+            # Try a more aggressive fallback approach for cloud environments
+            if os.getenv("STOCK4U_CLOUD") == "1":
+                try:
+                    # Try with a shorter period and different approach
+                    fallback_data = yf.Ticker(ticker).history(period="1mo")
+                    if not fallback_data.empty:
+                        data = fallback_data
+                    else:
+                        # Last resort: try to get current price only
+                        stock_info = yf.Ticker(ticker).info
+                        current_price = stock_info.get('currentPrice') or stock_info.get('regularMarketPrice')
+                        if current_price:
+                            return {
+                                "status": "partial_success",
+                                "ticker": ticker,
+                                "current_price": current_price,
+                                "nearest_support": current_price * 0.95,  # 5% below current
+                                "nearest_resistance": current_price * 1.05,  # 5% above current
+                                "error": "Limited data - using estimated support/resistance levels"
+                            }
+                except Exception:
+                    pass
+            
+            if data.empty:
+                return {
+                    "status": "error",
+                    "error": "No data available for support/resistance analysis"
+                }
         
         current_price = data['Close'].iloc[-1]
         high_prices = data['High'].values

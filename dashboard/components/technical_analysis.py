@@ -174,24 +174,103 @@ def display_technical_analysis(technical_summary: dict, ticker: str | None = Non
         support_resistance = technical_summary.get("support_resistance", {})
         if support_resistance:
             st.write("**Support & Resistance:**")
-            current_price = support_resistance.get("current_price", 0)
-            nearest_support = support_resistance.get("nearest_support", 0)
-            nearest_resistance = support_resistance.get("nearest_resistance", 0)
+            # Prefer enhanced keys; gracefully fall back to basic analyzer fields
+            current_price = support_resistance.get("current_price")
+            if (current_price is None or current_price == 0) and isinstance(df_smas, dict):
+                current_price = df_smas.get("close", current_price)
 
-            if current_price is not None:
-                st.write(f"- Current Price: ${current_price:.2f}")
-            else:
-                st.write("- Current Price: N/A")
+            nearest_support = support_resistance.get("nearest_support")
+            if nearest_support in (None, 0):
+                nearest_support = support_resistance.get("support_level")
 
-            if nearest_support is not None:
-                st.write(f"- Nearest Support: ${nearest_support:.2f}")
-            else:
-                st.write("- Nearest Support: N/A")
+            nearest_resistance = support_resistance.get("nearest_resistance")
+            if nearest_resistance in (None, 0):
+                nearest_resistance = support_resistance.get("resistance_level")
 
-            if nearest_resistance is not None:
-                st.write(f"- Nearest Resistance: ${nearest_resistance:.2f}")
+            # Enhanced fallback: try multiple approaches to get valid values
+            if df is not None and not df.empty:
+                try:
+                    latest_close = float(df["Close"].iloc[-1])
+                    latest_high = float(df["High"].iloc[-1])
+                    latest_low = float(df["Low"].iloc[-1])
+                    
+                    # Set current price if missing
+                    if not isinstance(current_price, (int, float)) or current_price == 0:
+                        current_price = latest_close
+                    
+                    # Calculate pivot points for fallback support/resistance
+                    pivot = (latest_high + latest_low + latest_close) / 3.0
+                    r1 = 2 * pivot - latest_low
+                    s1 = 2 * pivot - latest_high
+                    r2 = pivot + (latest_high - latest_low)
+                    s2 = pivot - (latest_high - latest_low)
+                    
+                    # Use moving averages as additional support/resistance levels
+                    ma_levels = []
+                    for ma_key in ["sma10", "sma20", "sma50", "sma200"]:
+                        if ma_key in df_smas and df_smas[ma_key] is not None:
+                            ma_levels.append(df_smas[ma_key])
+                    
+                    # Choose nearest support if missing or zero
+                    if not isinstance(nearest_support, (int, float)) or nearest_support == 0:
+                        candidates_s = [s for s in [s1, s2] + ma_levels if s < current_price and s > 0]
+                        if candidates_s:
+                            nearest_support = max(candidates_s)
+                        else:
+                            # Use recent lows as fallback
+                            recent_lows = df['Low'].rolling(window=20).min()
+                            if not recent_lows.empty:
+                                nearest_support = recent_lows.iloc[-1]
+                    
+                    # Choose nearest resistance if missing or zero
+                    if not isinstance(nearest_resistance, (int, float)) or nearest_resistance == 0:
+                        candidates_r = [r for r in [r1, r2] + ma_levels if r > current_price]
+                        if candidates_r:
+                            nearest_resistance = min(candidates_r)
+                        else:
+                            # Use recent highs as fallback
+                            recent_highs = df['High'].rolling(window=20).max()
+                            if not recent_highs.empty:
+                                nearest_resistance = recent_highs.iloc[-1]
+                                
+                except Exception as e:
+                    # If all else fails, try to fetch fresh data with a simple approach
+                    if ticker:
+                        try:
+                            import yfinance as yf_fallback
+                            fallback_stock = yf_fallback.Ticker(ticker)
+                            fallback_info = fallback_stock.info
+                            if fallback_info and not isinstance(current_price, (int, float)) or current_price == 0:
+                                current_price = fallback_info.get('currentPrice') or fallback_info.get('regularMarketPrice', 0)
+                        except Exception:
+                            pass
+
+            # Final fallback: if we still have no current price, try to get it from the basic yfinance call
+            if (not isinstance(current_price, (int, float)) or current_price == 0) and ticker:
+                try:
+                    import yfinance as yf_final
+                    stock_final = yf_final.Ticker(ticker)
+                    hist_final = stock_final.history(period="1d")
+                    if not hist_final.empty:
+                        current_price = float(hist_final["Close"].iloc[-1])
+                except Exception:
+                    pass
+
+            # Display with proper fallbacks and better error handling
+            if isinstance(current_price, (int, float)) and current_price not in (0, float("inf"), float("-inf")) and current_price > 0:
+                st.write(f"- Current Price: ${float(current_price):.2f}")
             else:
-                st.write("- Nearest Resistance: N/A")
+                st.write("- Current Price: Data unavailable")
+
+            if isinstance(nearest_support, (int, float)) and nearest_support not in (0, float("inf"), float("-inf")) and nearest_support > 0:
+                st.write(f"- Nearest Support: ${float(nearest_support):.2f}")
+            else:
+                st.write("- Nearest Support: Data unavailable")
+
+            if isinstance(nearest_resistance, (int, float)) and nearest_resistance not in (0, float("inf"), float("-inf")) and nearest_resistance > 0:
+                st.write(f"- Nearest Resistance: ${float(nearest_resistance):.2f}")
+            else:
+                st.write("- Nearest Resistance: Data unavailable")
 
         # Display patterns
         patterns = technical_summary.get("patterns", [])
