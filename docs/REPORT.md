@@ -28,7 +28,7 @@ Stock4U combines a layered architecture—data collection, analysis, prediction,
   - Proprietary premium data sources unless configured by the user
 
 ### Workflow
-![Stock4U Agentic Workflow](../Stock4U%20Agentic%20Workflow.drawio.png)
+![Stock4U Agentic Workflow](../Stock4U%20Agentic%20Workflow%20png.png)
 
 ### Success Metrics (targets)
 - Direction accuracy: > 60%
